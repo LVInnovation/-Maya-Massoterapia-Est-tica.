@@ -171,3 +171,4 @@ Em desenvolvimento e evolução contínua.
 ## © Maya Massoterapia & Estética
 
 Sistema desenvolvido para gerenciamento de atendimentos e agendamentos com foco em experiência premium e praticidade.
+
