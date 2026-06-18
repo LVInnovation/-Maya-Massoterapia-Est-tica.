@@ -5,6 +5,7 @@ import Agenda from '../pages/Agenda.tsx'
 import MeusAgendamentos from '../pages/MeusAgendamentos'
 import Login from '../pages/Login'
 import Notificacoes from '../pages/Notificacoes'
+import PacotesAtivos from '../pages/PacotesAtivos'
 import ProtectedRoute from './ProtectedRoute'
 
 function AppRoutes() {
@@ -28,6 +29,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Agenda />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/pacotes-ativos"
+        element={
+          <ProtectedRoute>
+            <PacotesAtivos />
           </ProtectedRoute>
         }
       />

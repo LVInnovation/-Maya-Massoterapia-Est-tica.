@@ -23,6 +23,7 @@ export interface SiteConfig {
     logout: string;
     admin: string;
     agenda: string;
+    activePackages: string;
     notifications: string;
     openMenuAria: string;
     closeMenuAria: string;
@@ -156,6 +157,7 @@ export const defaultSiteConfig: SiteConfig = {
     logout: 'Sair',
     admin: 'Admin',
     agenda: 'Agenda',
+    activePackages: 'Pacotes Ativos',
     notifications: 'Notificações',
     openMenuAria: 'Abrir menu',
     closeMenuAria: 'Fechar menu',

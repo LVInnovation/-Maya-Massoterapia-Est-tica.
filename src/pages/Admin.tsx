@@ -2930,6 +2930,13 @@ const Admin = () => {
                     }
                   />
                   <ContentField
+                    label="Pacotes Ativos"
+                    value={siteConfig.header.activePackages}
+                    onChange={(value) =>
+                      updateSiteSection("header", { activePackages: value })
+                    }
+                  />
+                  <ContentField
                     label="Notificações"
                     value={siteConfig.header.notifications}
                     onChange={(value) =>

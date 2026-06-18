@@ -21,6 +21,7 @@ const Navbar = ({ content, onNavigate }: NavbarProps) => {
   const isAdminPage =
     location.pathname === '/admin' ||
     location.pathname === '/agenda' ||
+    location.pathname === '/pacotes-ativos' ||
     location.pathname === '/notificacoes';
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,6 +86,13 @@ const Navbar = ({ content, onNavigate }: NavbarProps) => {
                   className="text-sm font-medium uppercase tracking-wide text-gray-300 transition-colors duration-200 hover:text-gold-400"
                 >
                   {content.header.agenda}
+                </Link>
+
+                <Link
+                  to="/pacotes-ativos"
+                  className="text-sm font-medium uppercase tracking-wide text-gray-300 transition-colors duration-200 hover:text-gold-400"
+                >
+                  {content.header.activePackages}
                 </Link>
 
                 <Link
@@ -200,6 +208,14 @@ const Navbar = ({ content, onNavigate }: NavbarProps) => {
                     className="rounded-2xl px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gold-400/10 hover:text-gold-400"
                   >
                     {content.header.agenda}
+                  </Link>
+
+                  <Link
+                    to="/pacotes-ativos"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-2xl px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gold-400/10 hover:text-gold-400"
+                  >
+                    {content.header.activePackages}
                   </Link>
 
                   <Link

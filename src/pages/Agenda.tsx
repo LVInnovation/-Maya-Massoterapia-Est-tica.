@@ -597,12 +597,20 @@ const Agenda = () => {
             </p>
           </div>
 
-          <Link
-            to="/"
-            className="w-fit rounded-full bg-gold-400/10 px-4 py-2 text-sm font-semibold text-gold-300 hover:bg-gold-400/15"
-          >
-            ← Site
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/pacotes-ativos"
+              className="w-fit rounded-full border border-gold-400/25 px-4 py-2 text-sm font-semibold text-gold-300 hover:bg-gold-400/10"
+            >
+              Pacotes Ativos
+            </Link>
+            <Link
+              to="/"
+              className="w-fit rounded-full bg-gold-400/10 px-4 py-2 text-sm font-semibold text-gold-300 hover:bg-gold-400/15"
+            >
+              ← Site
+            </Link>
+          </div>
         </div>
       </div>
 
