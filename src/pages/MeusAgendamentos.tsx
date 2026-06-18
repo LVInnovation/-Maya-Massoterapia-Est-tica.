@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { defaultSiteConfig, SiteConfig } from '../content/siteContent'
+import { loadSiteConfigFromDatabase } from '../services/siteConfig'
 import { supabase } from '../services/supabase'
 
 interface Appointment {
@@ -72,29 +74,30 @@ const getStatusStyle = (status?: string) => {
   switch (status) {
     case 'confirmado':
     case 'confirmed':
-      return { badge: 'bg-green-100 text-green-700', border: 'border-green-200' }
+      return { badge: 'border border-green-400/30 bg-green-400/10 text-green-300', border: 'border-green-400/25' }
     case 'cancelado':
     case 'canceled':
-      return { badge: 'bg-red-100 text-red-600', border: 'border-red-200' }
+      return { badge: 'border border-red-400/30 bg-red-400/10 text-red-300', border: 'border-red-400/25' }
     default:
-      return { badge: 'bg-pink-100 text-pink-600', border: 'border-pink-200' }
+      return { badge: 'border border-gold-400/30 bg-gold-400/10 text-gold-300', border: 'border-gold-400/25' }
   }
 }
 
-const getStatusLabel = (status?: string) => {
+const getStatusLabel = (status: string | undefined, content: SiteConfig) => {
   switch (status) {
     case 'confirmado':
     case 'confirmed':
-      return 'Confirmado'
+      return content.appointmentsPage.statusConfirmed
     case 'cancelado':
     case 'canceled':
-      return 'Cancelado'
+      return content.appointmentsPage.statusCanceled
     default:
-      return 'Agendado'
+      return content.appointmentsPage.statusScheduled
   }
 }
 
 const MeusAgendamentos = () => {
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(defaultSiteConfig)
   const [phone, setPhone] = useState('')
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(false)
@@ -102,6 +105,16 @@ const MeusAgendamentos = () => {
   const [error, setError] = useState('')
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [cancelSuccess, setCancelSuccess] = useState('')
+
+  useEffect(() => {
+    loadSiteConfigFromDatabase()
+      .then(setSiteConfig)
+      .catch(() => setSiteConfig(defaultSiteConfig))
+  }, [])
+
+  useEffect(() => {
+    document.title = `${siteConfig.appointmentsPage.title} - ${siteConfig.siteName}`
+  }, [siteConfig.appointmentsPage.title, siteConfig.siteName])
 
   const formatPhone = (value: string) => {
     const digits = onlyDigits(value).slice(0, 11)
@@ -118,7 +131,7 @@ const MeusAgendamentos = () => {
     const digits = normalizePhone(phone)
 
     if (digits.length < 8) {
-      setError('Digite um telefone valido.')
+      setError(siteConfig.appointmentsPage.invalidPhoneError)
       return
     }
 
@@ -171,14 +184,14 @@ const MeusAgendamentos = () => {
       setSearched(true)
     } catch (err) {
       console.error('Erro ao buscar agendamentos:', err)
-      setError('Erro ao buscar agendamentos. Tente novamente.')
+      setError(siteConfig.appointmentsPage.searchError)
     } finally {
       setLoading(false)
     }
   }
 
   const cancelAppointment = async (id: string) => {
-    if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return
+    if (!confirm(siteConfig.appointmentsPage.cancelConfirm)) return
 
     setCancelingId(id)
     setError('')
@@ -192,10 +205,10 @@ const MeusAgendamentos = () => {
       if (supabaseError) throw supabaseError
 
       setAppointments((prev) => prev.filter((a) => a.id !== id))
-      setCancelSuccess('Agendamento cancelado com sucesso.')
+      setCancelSuccess(siteConfig.appointmentsPage.cancelSuccess)
     } catch (err) {
       console.error('Erro ao cancelar:', err)
-      setError('Erro ao cancelar agendamento. Tente novamente.')
+      setError(siteConfig.appointmentsPage.cancelError)
     } finally {
       setCancelingId(null)
     }
@@ -206,50 +219,50 @@ const MeusAgendamentos = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-pink-50 via-white to-pink-50">
-      <div className="border-b border-pink-100 bg-white/80 backdrop-blur-md shadow-sm">
+    <div className="min-h-screen overflow-x-hidden bg-dark-900">
+      <div className="border-b border-gold-400/20 bg-dark-800/90 shadow-dark-lg backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-800 sm:text-2xl">Meus Agendamentos</h1>
-            <p className="text-xs text-gray-500">Consulte e cancele seus horários</p>
+            <h1 className="font-serif text-xl font-bold text-gold-400 sm:text-2xl">{siteConfig.appointmentsPage.title}</h1>
+            <p className="text-xs text-gray-400">{siteConfig.appointmentsPage.subtitle}</p>
           </div>
           <Link
             to="/"
-            className="rounded-full bg-pink-50 px-4 py-2 text-sm font-semibold text-pink-500 hover:bg-pink-100 transition-colors"
+            className="rounded-full border border-gold-400/40 bg-gold-400/10 px-4 py-2 text-sm font-semibold text-gold-300 transition-colors hover:bg-gold-400/15"
           >
-            ← Voltar
+            {siteConfig.buttons.backToSite}
           </Link>
         </div>
       </div>
 
       <div className="mx-auto max-w-lg px-4 py-8">
-        <div className="rounded-3xl border border-pink-100 bg-white p-6 shadow-sm">
+        <div className="rounded-3xl border border-gold-400/20 bg-dark-700 p-6 shadow-card">
           <div className="mb-5 text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100">
-              <svg className="h-7 w-7 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-400/15">
+              <svg className="h-7 w-7 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-gray-800">Digite seu telefone</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Buscaremos todos os seus agendamentos futuros
+            <h2 className="font-serif text-lg font-bold text-gold-300">{siteConfig.appointmentsPage.phoneCardTitle}</h2>
+            <p className="mt-1 text-sm text-gray-400">
+              {siteConfig.appointmentsPage.phoneCardDescription}
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
             <input
               type="tel"
               value={phone}
               onChange={handlePhoneChange}
               onKeyDown={handleKeyDown}
-              placeholder="(11) 99999-9999"
-              className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-center text-lg font-semibold tracking-wide text-gray-800 outline-none placeholder:font-normal placeholder:text-gray-400 focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
+              placeholder={siteConfig.appointmentsPage.phonePlaceholder}
+              className="min-w-0 flex-1 rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-3 text-center text-base font-semibold tracking-wide text-gray-100 outline-none placeholder:font-normal placeholder:text-gray-500 focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:text-lg"
             />
             <button
               type="button"
               onClick={searchAppointments}
               disabled={loading}
-              className="rounded-2xl bg-pink-500 px-5 py-3 font-semibold text-white shadow-md hover:bg-pink-600 disabled:opacity-60 transition-colors"
+              className="inline-flex w-full items-center justify-center rounded-2xl bg-gold-400 px-5 py-3 font-semibold text-dark-900 shadow-md shadow-gold-400/20 transition-colors hover:bg-gold-300 disabled:opacity-60 sm:w-auto"
             >
               {loading ? (
                 <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -265,14 +278,14 @@ const MeusAgendamentos = () => {
           </div>
 
           {error && (
-            <p className="mt-3 rounded-2xl bg-red-50 px-4 py-2 text-center text-sm text-red-600">
+            <p className="mt-3 rounded-2xl border border-red-400/30 bg-red-950/40 px-4 py-2 text-center text-sm text-red-300">
               {error}
             </p>
           )}
         </div>
 
         {cancelSuccess && (
-          <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-700">
+          <div className="mt-4 rounded-2xl border border-green-400/30 bg-green-950/30 px-4 py-3 text-center text-sm font-medium text-green-300">
             ✓ {cancelSuccess}
           </div>
         )}
@@ -280,27 +293,30 @@ const MeusAgendamentos = () => {
         {searched && (
           <div className="mt-6">
             {appointments.length === 0 ? (
-              <div className="rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
-                  <svg className="h-7 w-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="rounded-3xl border border-gold-400/20 bg-dark-700 p-8 text-center shadow-card">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-400/10">
+                  <svg className="h-7 w-7 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <p className="font-semibold text-gray-700">Nenhum agendamento encontrado</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Não encontramos agendamentos futuros para este número.
+                <p className="font-semibold text-gray-100">{siteConfig.appointmentsPage.emptyTitle}</p>
+                <p className="mt-1 text-sm text-gray-400">
+                  {siteConfig.appointmentsPage.emptyDescription}
                 </p>
                 <Link
                   to="/"
-                  className="mt-4 inline-block rounded-full bg-pink-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-pink-600 transition-colors"
+                  className="mt-4 inline-block rounded-full bg-gold-400 px-6 py-2.5 text-sm font-semibold text-dark-900 shadow-md shadow-gold-400/20 transition-colors hover:bg-gold-300"
                 >
-                  Fazer agendamento
+                  {siteConfig.buttons.makeAppointment}
                 </Link>
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-center text-sm font-medium text-gray-500">
-                  {appointments.length} agendamento{appointments.length > 1 ? 's' : ''} encontrado{appointments.length > 1 ? 's' : ''}
+                <p className="text-center text-sm font-medium text-gray-400">
+                  {appointments.length}{' '}
+                  {appointments.length > 1
+                    ? siteConfig.appointmentsPage.foundPlural
+                    : siteConfig.appointmentsPage.foundSingular}
                 </p>
 
                 {appointments.map((appointment) => {
@@ -310,35 +326,35 @@ const MeusAgendamentos = () => {
                   return (
                     <div
                       key={appointment.id}
-                      className={`rounded-3xl border bg-white p-5 shadow-sm ${style.border}`}
+                      className={`rounded-3xl border bg-dark-700 p-5 shadow-card ${style.border}`}
                     >
                       <div className="mb-3 flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-bold text-gray-900">{appointment.clientName}</p>
-                          <p className="text-sm text-pink-600 font-medium">{appointment.professionalName}</p>
+                          <p className="font-bold text-gray-100">{appointment.clientName}</p>
+                          <p className="text-sm font-medium text-gold-300">{appointment.professionalName}</p>
                         </div>
                         <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${style.badge}`}>
-                          {getStatusLabel(appointment.status)}
+                          {getStatusLabel(appointment.status, siteConfig)}
                         </span>
                       </div>
 
-                      <div className="space-y-1.5 text-sm text-gray-600">
+                      <div className="space-y-1.5 text-sm text-gray-300">
                         <div className="flex items-center gap-2">
-                          <svg className="h-4 w-4 shrink-0 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 shrink-0 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                           <span className="capitalize">{formatDateLabel(appointment.date)}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <svg className="h-4 w-4 shrink-0 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 shrink-0 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span>{appointment.time}{appointment.duration ? ` • ${appointment.duration}` : ''}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <svg className="h-4 w-4 shrink-0 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 shrink-0 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                           </svg>
                           <span>{appointment.serviceName}</span>
@@ -349,9 +365,9 @@ const MeusAgendamentos = () => {
                         type="button"
                         onClick={() => cancelAppointment(appointment.id)}
                         disabled={isCanceling}
-                        className="mt-4 w-full rounded-2xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors"
+                        className="mt-4 w-full rounded-2xl border border-red-400/30 bg-red-950/30 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-950/50 disabled:opacity-60"
                       >
-                        {isCanceling ? 'Cancelando...' : 'Cancelar agendamento'}
+                        {isCanceling ? siteConfig.buttons.saving : siteConfig.buttons.cancelAppointment}
                       </button>
                     </div>
                   )

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { defaultSiteConfig, SiteConfig } from '../content/siteContent';
+import { loadSiteConfigFromDatabase } from '../services/siteConfig';
 import { MonthlySchedule, ScheduleBlock, WeeklyRule, WeekDay } from '../components/schedule/types';
 import Navbar from '../components/common/Navbar';
 import Button from '../components/common/Button';
@@ -53,41 +55,6 @@ interface Professional {
   vacation?: VacationPeriod;
 }
 
-interface SiteService {
-  id: string | number;
-  name: string;
-  description: string;
-}
-
-interface SiteConfig {
-  siteName: string;
-  footerDescription: string;
-  contactEmail: string;
-  contactPhone: string;
-  servicesBadge: string;
-  servicesTitle: string;
-  servicesSubtitle: string;
-  services: SiteService[];
-}
-
-
-const defaultSiteConfig: SiteConfig = {
-  siteName: 'Maya Massoterapia & Estética',
-  footerDescription:
-    'Sistema de agendamento moderno para salões de beleza. Transformando a experiência de agendamento com elegância e praticidade.',
-  contactEmail: 'contato@mayamassoterapia.com',
-  contactPhone: '(11) 99999-9999',
-  servicesBadge: 'O que oferecemos',
-  servicesTitle: 'Nossos Serviços',
-  servicesSubtitle: 'Uma variedade de serviços para realçar sua beleza e bem-estar.',
-  services: [
-    { id: 1, name: 'Corte e Pintura', description: 'Transformação completa dos fios' },
-    { id: 2, name: 'Manicure e Pedicure', description: 'Cuidados completos para as unhas' },
-    { id: 3, name: 'Tratamentos Faciais', description: 'Limpeza e rejuvenescimento' },
-    { id: 4, name: 'Massagem Relaxante', description: 'Bem-estar e relaxamento' },
-  ],
-};
-
 const defaultProfessionals: Professional[] = [
   {
     id: 1,
@@ -135,8 +102,6 @@ const defaultProfessionals: Professional[] = [
 ];
 
 
-const APP_STATE_TABLE = 'site_config';
-const APP_STATE_ID = 'maya-massoterapia-admin-state';
 const DEFAULT_PROFESSIONAL_IMAGE = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=500&fit=crop';
 
 type DatabaseProfessional = {
@@ -305,26 +270,15 @@ const loadProfessionalsFromDatabase = async (): Promise<Professional[]> => {
   );
 };
 
-const loadSiteConfigFromDatabase = async (): Promise<SiteConfig> => {
-  const { data, error } = await supabase
-    .from(APP_STATE_TABLE)
-    .select('config')
-    .eq('id', APP_STATE_ID)
-    .maybeSingle();
-
-  if (error || !data?.config) return defaultSiteConfig;
-
-  const state = data.config as { siteConfig?: SiteConfig };
-  return state.siteConfig ? { ...defaultSiteConfig, ...state.siteConfig } : defaultSiteConfig;
-};
-
-
 const Home = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(defaultSiteConfig);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingProfessionalId, setBookingProfessionalId] = useState<string | number | null>(null);
   const [bookingToast, setBookingToast] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const scrollTarget = (location.state as { scrollTo?: string } | null)?.scrollTo;
 
   useEffect(() => {
     const loadData = async () => {
@@ -346,7 +300,11 @@ const Home = () => {
     loadData();
   }, []);
 
-  const handleNavigate = (sectionId: string) => {
+  useEffect(() => {
+    document.title = `${siteConfig.siteName} - ${siteConfig.header.browserTitleSuffix}`;
+  }, [siteConfig.header.browserTitleSuffix, siteConfig.siteName]);
+
+  const handleNavigate = useCallback((sectionId: string) => {
     if (sectionId === 'booking') {
       setBookingProfessionalId(null);
       setBookingOpen(true);
@@ -354,7 +312,18 @@ const Home = () => {
     }
 
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+
+    const timeout = window.setTimeout(() => {
+      handleNavigate(scrollTarget);
+      navigate('/', { replace: true, state: null });
+    }, 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [handleNavigate, navigate, scrollTarget]);
 
   const handleViewSchedule = (professionalId: string | number) => {
     setBookingProfessionalId(professionalId);
@@ -377,8 +346,8 @@ const Home = () => {
   }, [bookingToast]);
 
   return (
-    <div className="min-h-screen bg-dark-900">
-      <Navbar onNavigate={handleNavigate} />
+    <div className="min-h-screen overflow-x-hidden bg-dark-900">
+      <Navbar content={siteConfig} onNavigate={handleNavigate} />
 
       {bookingToast && (
         <div className="fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-[280px] -translate-x-1/2 sm:left-auto sm:right-4 sm:max-w-sm sm:translate-x-0">
@@ -394,17 +363,17 @@ const Home = () => {
 
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold leading-tight text-gold-300">
-                  Agendamento confirmado
+                  {siteConfig.messages.bookingToastTitle}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-gray-400">
-                  Seu horário foi reservado com sucesso.
+                  {siteConfig.messages.bookingToastDescription}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setBookingToast('')}
-                aria-label="Fechar aviso"
+                aria-label={siteConfig.messages.closeNoticeAria}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg leading-none text-gray-500 transition hover:bg-gold-400/10 hover:text-gold-400"
               >
                 ×
@@ -414,28 +383,29 @@ const Home = () => {
         </div>
       )}
 
-      <section id="home" className="relative px-4 pb-10 pt-20 sm:pb-16 sm:pt-28 md:pb-24 md:pt-32">
+      <section id="home" className="relative scroll-mt-20 px-4 pb-10 pt-20 sm:pb-16 sm:pt-28 md:pb-24 md:pt-32">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-md text-center md:max-w-3xl">
             <span className="mb-4 inline-block rounded-full bg-gold-400/15 px-4 py-1.5 text-xs font-semibold text-gold-300 sm:mb-6 sm:px-4 sm:py-1.5 sm:text-sm">
-              ✨ Sistema de Agendamento Premium
-            </span>
+                {siteConfig.home.heroBadge}
+              </span>
 
             <h1 className="mb-4 font-serif text-[30px] font-bold leading-[1.12] text-gold-300 sm:text-4xl md:mb-6 md:text-6xl">
-              Descubra a <span className="text-gold-400">beleza</span> premium que existe em você
+              {siteConfig.home.heroTitleStart}{' '}
+              <span className="text-gold-400">{siteConfig.home.heroTitleHighlight}</span>{' '}
+              {siteConfig.home.heroTitleEnd}
             </h1>
 
             <p className="mx-auto mb-6 max-w-sm text-[15px] leading-relaxed text-gray-300 sm:text-lg md:mb-8 md:max-w-2xl md:text-xl">
-              Agende seus serviços de beleza de forma simples e refinada.
-              Profissionais especializadas prontas para transformar seu visual.
+              {siteConfig.home.heroSubtitle}
             </p>
 
             <div className="mx-auto flex max-w-xs flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
               <Button onClick={() => setBookingOpen(true)} className="w-full sm:w-auto">
-                Agendar agora
+                {siteConfig.buttons.scheduleNow}
               </Button>
               <Button variant="outline" onClick={() => handleNavigate('professionals')} className="w-full sm:w-auto">
-                Ver profissionais
+                {siteConfig.buttons.viewProfessionals}
               </Button>
               <Link
                 to="/meus-agendamentos"
@@ -444,24 +414,24 @@ const Home = () => {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                Meus agendamentos
+                {siteConfig.buttons.myAppointments}
               </Link>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="professionals" className="border-t border-gold-400/20 bg-dark-800 px-4 py-10 sm:py-16 md:py-20">
+      <section id="professionals" className="scroll-mt-20 border-t border-gold-400/20 bg-dark-800 px-4 py-10 sm:py-16 md:py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center sm:mb-16">
             <span className="mb-4 inline-block rounded-full bg-gold-400/15 px-4 py-1.5 text-xs font-semibold text-gold-300 sm:mb-6 sm:px-4 sm:py-1.5 sm:text-sm">
-              Nossa Equipe Premium
+              {siteConfig.home.professionalsBadge}
             </span>
             <h2 className="mb-4 font-serif text-2xl font-bold leading-tight text-gold-300 sm:text-3xl md:mb-6 md:text-4xl">
-              Profissionais Especializadas
+              {siteConfig.home.professionalsTitle}
             </h2>
             <p className="mx-auto max-w-sm text-sm leading-relaxed text-gray-400 sm:max-w-xl sm:text-base">
-              Conte com profissionais experientes e dedicadas para cuidar da sua beleza com excelência.
+              {siteConfig.home.professionalsSubtitle}
             </p>
           </div>
 
@@ -470,6 +440,9 @@ const Home = () => {
               <ProfessionalCard
                 key={professional.id}
                 professional={professional as any}
+                actionLabel={siteConfig.buttons.viewSchedule}
+                fallbackName={siteConfig.messages.professionalFallbackName}
+                fallbackSpecialty={siteConfig.messages.professionalFallbackSpecialty}
                 onViewSchedule={handleViewSchedule as any}
               />
             ))}
@@ -477,7 +450,7 @@ const Home = () => {
         </div>
       </section>
 
-      <section id="services" className="bg-dark-800/50 px-4 py-10 sm:py-16 md:py-20">
+      <section id="services" className="scroll-mt-20 bg-dark-800/50 px-4 py-10 sm:py-16 md:py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center sm:mb-16">
             <span className="mb-4 inline-block rounded-full bg-gold-400/15 px-4 py-1.5 text-xs font-semibold text-gold-300 sm:mb-6 sm:px-4 sm:py-1.5 sm:text-sm">
@@ -510,31 +483,26 @@ const Home = () => {
         </div>
       </section>
 
-      <section id="booking" className="relative border-t border-gold-400/20 bg-dark-700 px-4 py-16 sm:py-20 md:py-24">
+      <section id="booking" className="relative scroll-mt-20 border-t border-gold-400/20 bg-dark-700 px-4 py-16 sm:py-20 md:py-24">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="mb-4 font-serif text-2xl font-bold text-gold-300 sm:text-3xl md:mb-6 md:text-4xl">
-            Pronto para uma transformação premium?
+            {siteConfig.home.ctaTitle}
           </h2>
           <p className="mx-auto mb-8 max-w-sm text-sm leading-relaxed text-gray-300 sm:max-w-xl sm:text-lg md:mb-10">
-            Agende seu horário agora e descubra uma nova versão refinada de si mesma.
-            Nossa equipe premium está pronta para transformar você.
+            {siteConfig.home.ctaSubtitle}
           </p>
           <Button
             onClick={() => setBookingOpen(true)}
           >
-            Agendar horário
+            {siteConfig.buttons.scheduleTime}
           </Button>
         </div>
       </section>
 
-      <Footer
-  siteName={siteConfig.siteName}
-  footerDescription={siteConfig.footerDescription}
-  contactEmail={siteConfig.contactEmail}
-  contactPhone={siteConfig.contactPhone}
-/>
+      <Footer content={siteConfig} />
       <BookingModal
         isOpen={bookingOpen}
+        content={siteConfig}
         professionals={professionals}
         initialProfessionalId={bookingProfessionalId}
         onClose={closeBooking}

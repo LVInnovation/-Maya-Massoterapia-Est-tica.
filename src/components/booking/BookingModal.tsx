@@ -1,5 +1,6 @@
 ﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../services/supabase';
+import { SiteConfig } from '../../content/siteContent';
 import { MonthlySchedule } from '../schedule/types';
 
 interface Service {
@@ -65,6 +66,7 @@ interface Appointment {
 
 interface BookingModalProps {
   isOpen: boolean;
+  content: SiteConfig;
   professionals: Professional[];
   initialProfessionalId?: string | number | null;
   onClose: () => void;
@@ -288,7 +290,7 @@ const dayLabels: Record<WeekDay, string> = {
   wednesday: 'Qua',
   thursday: 'Qui',
   friday: 'Sex',
-  saturday: 'SÃ¡b',
+  saturday: 'Sáb',
   sunday: 'Dom',
 };
 
@@ -323,7 +325,11 @@ const isDateInVacation = (dateKey: string, vacation?: VacationPeriod) => {
   return dateKey >= vacation.startDate && dateKey <= vacation.endDate;
 };
 
-const getAvailableDates = (schedule: MonthlySchedule, vacation?: VacationPeriod) => {
+const getAvailableDates = (
+  schedule: MonthlySchedule,
+  content: SiteConfig,
+  vacation?: VacationPeriod,
+) => {
   const dates = getRollingAvailableDates();
 
   return dates.map((date) => {
@@ -349,17 +355,17 @@ const getAvailableDates = (schedule: MonthlySchedule, vacation?: VacationPeriod)
     return {
       date,
       dateKey,
-      label: `${formatDateLabel(date)} â€¢ ${dayLabels[dayKey]}`,
+      label: `${formatDateLabel(date)} • ${dayLabels[dayKey]}`,
       available: rule.enabled && !fullDayBlock && !vacationBlocked,
       reason: !rule.enabled
-        ? 'IndisponÃ­vel'
+        ? content.bookingModal.statusUnavailable
         : vacationBlocked
-          ? 'FÃ©rias'
+          ? content.bookingModal.statusVacation
           : fullDayBlock
-            ? 'Bloqueado'
+            ? content.bookingModal.statusBlocked
             : blockedRanges.length > 0
-              ? 'Parcialmente disponÃ­vel'
-              : 'DisponÃ­vel',
+              ? content.bookingModal.statusPartial
+              : content.bookingModal.statusAvailable,
       blockedRanges,
       startTime: rule.startTime,
       endTime: rule.endTime,
@@ -466,6 +472,7 @@ const getAvailableTimeSlots = (
 
 const BookingModal = ({
   isOpen,
+  content,
   professionals,
   initialProfessionalId,
   onClose,
@@ -567,7 +574,7 @@ const BookingModal = ({
 
         setSimultaneousByProfessionalId(flags);
       } catch (error) {
-        console.warn('Atendimento simultÃ¢neo nÃ£o carregado:', error);
+        console.warn('Atendimento simultâneo não carregado:', error);
         setSimultaneousByProfessionalId({});
       }
     };
@@ -595,6 +602,7 @@ const BookingModal = ({
     const duration = parseDurationMinutes(selectedService.duration);
     return getAvailableDates(
       selectedSchedule,
+      content,
       selectedProfessional.vacation,
     ).map((item) => {
       if (!item.available) return item;
@@ -611,10 +619,10 @@ const BookingModal = ({
       return {
         ...item,
         available: slots.length > 0,
-        reason: slots.length > 0 ? item.reason : 'Sem horÃ¡rios disponÃ­veis',
+        reason: slots.length > 0 ? item.reason : content.bookingModal.noSlotsReason,
       };
     });
-  }, [selectedSchedule, selectedProfessional, selectedService, appointments]);
+  }, [selectedSchedule, selectedProfessional, selectedService, appointments, content]);
 
   const appointmentSlots = useMemo(() => {
     const duration = parseDurationMinutes(selectedService?.duration ?? '60');
@@ -672,7 +680,7 @@ const BookingModal = ({
       !selectedDate ||
       !selectedTime
     ) {
-      setError('Preencha todos os campos para continuar.');
+      setError(content.bookingModal.requiredError);
       return;
     }
 
@@ -704,7 +712,7 @@ const BookingModal = ({
 
     if (conflict) {
       setError(
-        'JÃ¡ existe um agendamento nesse intervalo com essa profissional. Escolha outro horÃ¡rio.',
+        content.bookingModal.conflictError,
       );
       return;
     }
@@ -737,7 +745,7 @@ const BookingModal = ({
 
     if (phoneConflict) {
       setError(
-        'Este telefone jÃ¡ possui um agendamento nesse mesmo dia e horÃ¡rio. Escolha outro horÃ¡rio.',
+        content.bookingModal.phoneConflictError,
       );
       return;
     }
@@ -752,7 +760,7 @@ const BookingModal = ({
     if (blockedError) throw blockedError;
 
     if (blockedClient) {
-      setError('ServiÃ§o indisponÃ­vel. Entre em contato.');
+      setError(content.bookingModal.blockedError);
       return;
     }
 
@@ -805,7 +813,7 @@ const BookingModal = ({
       onClose();
     } catch (error) {
       console.error('Erro ao salvar agendamento:', error);
-      setError('NÃ£o consegui salvar o agendamento. Verifique o armazenamento local do navegador.');
+      setError(content.bookingModal.saveError);
     } finally {
       setIsSaving(false);
     }
@@ -824,23 +832,23 @@ const BookingModal = ({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.22em] text-gold-400 sm:text-sm font-semibold">
-                Agendamento Premium
+                {content.bookingModal.eyebrow}
               </p>
               <h2 className="mt-0.5 text-lg font-semibold leading-tight text-gold-300 sm:text-2xl font-serif">
-                Reserve seu horÃ¡rio
+                {content.bookingModal.title}
               </h2>
               <p className="mt-0.5 max-w-md text-[11px] leading-snug text-gray-400 sm:text-sm">
-                Selecione profissional, serviÃ§o, data e horÃ¡rio.
+                {content.bookingModal.subtitle}
               </p>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              aria-label="Fechar agendamento"
+              aria-label={content.bookingModal.closeAria}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold-400/30 bg-dark-600 text-lg leading-none text-gray-400 transition hover:border-gold-400 hover:text-gold-400"
             >
-              Ã—
+              ×
             </button>
           </div>
         </div>
@@ -855,26 +863,26 @@ const BookingModal = ({
               <div className="grid gap-2 md:grid-cols-2">
                 <div className="rounded-3xl border border-gold-400/20 bg-dark-600 p-3 sm:p-5">
                   <h3 className="text-sm font-semibold text-gold-300 mb-3">
-                    Dados do cliente
+                    {content.bookingModal.clientDataTitle}
                   </h3>
 
                   <div className="space-y-2.5">
                     <label className="block text-xs font-medium text-gray-300">
-                      Nome
+                      {content.bookingModal.nameLabel}
                     </label>
                     <input
                       type="text"
                       value={clientName}
                       onChange={(event) => setClientName(event.target.value)}
                       className="w-full rounded-2xl border border-gold-400/20 bg-dark-500 px-3 py-2 text-sm text-gray-100 outline-none transition focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
-                      placeholder="Seu nome"
+                      placeholder={content.bookingModal.namePlaceholder}
                       required
                     />
                   </div>
 
                   <div className="mt-2 space-y-2.5">
                     <label className="block text-xs font-medium text-gray-300">
-                      Telefone
+                      {content.bookingModal.phoneLabel}
                     </label>
                     <input
                       type="tel"
@@ -883,7 +891,7 @@ const BookingModal = ({
                         setPhone(formatPhone(event.target.value))
                       }
                       className="w-full rounded-2xl border border-gold-400/20 bg-dark-500 px-3 py-2 text-sm text-gray-100 outline-none transition focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
-                      placeholder="(XX) XXXXX-XXXX"
+                      placeholder={content.bookingModal.phonePlaceholder}
                       required
                     />
                   </div>
@@ -891,12 +899,12 @@ const BookingModal = ({
 
                 <div className="rounded-3xl border border-gold-400/20 bg-dark-600 p-3 sm:p-5">
                   <h3 className="mb-3 text-sm font-semibold text-gold-300">
-                    Escolha profissional e serviÃ§o
+                    {content.bookingModal.selectionTitle}
                   </h3>
 
                   <div className="space-y-2.5">
                     <span className="block text-xs font-medium text-gray-300">
-                      Profissional
+                      {content.bookingModal.professionalLabel}
                     </span>
 
                     <div className="grid gap-2">
@@ -922,16 +930,16 @@ const BookingModal = ({
 
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-semibold text-gray-100">
-                                {professional.name}
+                                {professional.name || content.messages.professionalFallbackName}
                               </span>
                               <span className="block truncate text-[11px] text-gray-400">
-                                {professional.specialty}
+                                {professional.specialty || content.messages.professionalFallbackSpecialty}
                               </span>
                             </span>
 
                             {isSelected && (
                               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold-400 text-xs text-dark-900">
-                                âœ“
+                                ✓
                               </span>
                             )}
                           </button>
@@ -942,7 +950,7 @@ const BookingModal = ({
 
                   <div className="mt-3 space-y-2.5">
                     <span className="block text-xs font-medium text-gray-300">
-                      ServiÃ§o
+                      {content.bookingModal.serviceLabel}
                     </span>
 
                     <div className="grid gap-2">
@@ -973,7 +981,7 @@ const BookingModal = ({
                                 isSelected ? 'text-dark-700' : 'text-gray-400'
                               }`}
                             >
-                              {service.duration} min â€¢ {service.price}
+                              {service.duration} min • {service.price}
                             </span>
                           </button>
                         );
@@ -982,7 +990,7 @@ const BookingModal = ({
 
                     {!selectedProfessional?.services.length && (
                       <div className="rounded-xl border border-gold-400/20 bg-dark-700/80 p-3 text-xs text-gray-300">
-                        Esta profissional ainda nÃ£o possui serviÃ§os cadastrados.
+                        {content.bookingModal.noServices}
                       </div>
                     )}
                   </div>
@@ -993,17 +1001,17 @@ const BookingModal = ({
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-gray-100">
-                      Escolha data e horÃ¡rio
+                      {content.bookingModal.dateTimeTitle}
                     </h3>
                     <p className="mt-1 text-xs text-gray-400 sm:text-sm">
-                      Toque em uma data e depois no horÃ¡rio.
+                      {content.bookingModal.dateTimeSubtitle}
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-2.5">
                   <span className="text-sm font-medium text-gray-200">
-                    Data
+                    {content.bookingModal.dateLabel}
                   </span>
 
                   {availableDates.length > 0 ? (
@@ -1041,7 +1049,7 @@ const BookingModal = ({
                                     : 'text-gray-400'
                               }`}
                             >
-                              {item.available ? 'DisponÃ­vel' : item.reason}
+                              {item.available ? content.bookingModal.statusAvailable : item.reason}
                             </span>
                           </button>
                         );
@@ -1049,19 +1057,19 @@ const BookingModal = ({
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-gold-400/20 bg-dark-700/80 p-3 text-xs text-gray-300">
-                      Nenhuma data encontrada para esta profissional.
+                      {content.bookingModal.noDates}
                     </div>
                   )}
                 </div>
 
                 <div className="mt-3 space-y-2.5">
                   <span className="text-sm font-medium text-gray-200">
-                    HorÃ¡rio
+                    {content.bookingModal.timeLabel}
                   </span>
 
                   {!selectedDate ? (
                     <div className="rounded-2xl border border-gold-400/20 bg-dark-700/80 p-3 text-xs text-gray-300">
-                      Selecione uma data para ver os horÃ¡rios disponÃ­veis.
+                      {content.bookingModal.selectDateFirst}
                     </div>
                   ) : appointmentSlots.length > 0 ? (
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
@@ -1089,7 +1097,7 @@ const BookingModal = ({
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-gold-400/20 bg-dark-700/80 p-3 text-xs text-gray-300">
-                      NÃ£o hÃ¡ horÃ¡rios disponÃ­veis para esta data.
+                      {content.bookingModal.noTimes}
                     </div>
                   )}
                 </div>
@@ -1103,24 +1111,27 @@ const BookingModal = ({
 
               <section className="hidden rounded-3xl border border-gold-400/20 bg-gold-400/5 p-3 sm:block sm:p-5">
                 <h3 className="text-xs font-semibold text-gold-300">
-                  Resumo
+                  {content.bookingModal.summaryTitle}
                 </h3>
 
                 <div className="mt-2 space-y-1 text-[11px] text-gray-300 sm:space-y-2 sm:text-sm">
-                  <p>Profissional: {selectedProfessional?.name}</p>
                   <p>
-                    ServiÃ§o:{' '}
-                    {selectedService?.name || 'Selecione um serviÃ§o'}
+                    {content.bookingModal.summaryProfessionalLabel}:{' '}
+                    {selectedProfessional?.name || content.messages.professionalFallbackName}
+                  </p>
+                  <p>
+                    {content.bookingModal.summaryServiceLabel}:{' '}
+                    {selectedService?.name || content.bookingModal.selectService}
                   </p>
                   <p>
                     {selectedDate
-                      ? `Data escolhida: ${selectedDate}`
-                      : 'Selecione uma data disponÃ­vel'}
+                      ? `${content.bookingModal.selectedDatePrefix}: ${selectedDate}`
+                      : content.bookingModal.selectAvailableDate}
                   </p>
                   <p>
                     {selectedTime
-                      ? `HorÃ¡rio escolhido: ${selectedTime}`
-                      : 'Selecione um horÃ¡rio disponÃ­vel'}
+                      ? `${content.bookingModal.selectedTimePrefix}: ${selectedTime}`
+                      : content.bookingModal.selectAvailableTime}
                   </p>
                 </div>
               </section>
@@ -1131,7 +1142,7 @@ const BookingModal = ({
         <div className="shrink-0 border-t border-gold-400/20 bg-dark-700 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-6 sm:py-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-gray-400 sm:text-sm">
-              {availableCount} dias disponÃ­veis atÃ© o mesmo dia do prÃ³ximo mÃªs.
+              {availableCount} {content.bookingModal.availableDaysSuffix}
             </p>
 
             <button
@@ -1140,7 +1151,7 @@ const BookingModal = ({
               disabled={isSaving}
               className="w-full rounded-full bg-gold-400 px-4 py-3 text-sm font-semibold text-dark-900 shadow-md shadow-gold-400/20 transition hover:bg-gold-300 hover:shadow-gold-glow disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-2.5"
             >
-              {isSaving ? 'Salvando...' : 'Confirmar agendamento'}
+              {isSaving ? content.buttons.saving : content.buttons.confirmBooking}
             </button>
           </div>
         </div>
@@ -1150,4 +1161,3 @@ const BookingModal = ({
 };
 
 export default BookingModal;
-

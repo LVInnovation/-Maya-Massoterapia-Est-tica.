@@ -80,9 +80,9 @@ const Notificacoes = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="border-b bg-white shadow-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
               Notificações
             </h1>
 
@@ -93,7 +93,7 @@ const Notificacoes = () => {
 
           <Link
             to="/agenda"
-            className="rounded-full bg-pink-50 px-4 py-2 text-sm font-semibold text-pink-500 hover:bg-pink-100"
+            className="w-fit rounded-full bg-pink-50 px-4 py-2 text-sm font-semibold text-pink-500 hover:bg-pink-100"
           >
             ← Agenda
           </Link>

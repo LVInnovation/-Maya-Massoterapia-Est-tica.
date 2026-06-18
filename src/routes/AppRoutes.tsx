@@ -5,16 +5,7 @@ import Agenda from '../pages/Agenda.tsx'
 import MeusAgendamentos from '../pages/MeusAgendamentos'
 import Login from '../pages/Login'
 import Notificacoes from '../pages/Notificacoes'
-
-const isAuthenticated = () => sessionStorage.getItem('maya_auth') === 'true'
-
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" replace />
-  }
-
-  return children
-}
+import ProtectedRoute from './ProtectedRoute'
 
 function AppRoutes() {
   return (
@@ -49,6 +40,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

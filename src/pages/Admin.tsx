@@ -1,5 +1,9 @@
 ﻿import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import { supabase } from "../services/supabase";
+import { Link } from "react-router-dom";
+import { defaultSiteConfig, normalizeSiteConfig, SiteConfig, SiteService } from "../content/siteContent";
+import { loadSiteConfigFromDatabase, saveSiteConfigToDatabase } from "../services/siteConfig";
 import {
   MonthlySchedule,
   ScheduleBlock,
@@ -11,8 +15,6 @@ import {
 // CONSTANTES
 // ============================================
 
-const APP_STATE_TABLE = "site_config";
-const APP_STATE_ID = "maya-massoterapia-admin-state";
 const PROFESSIONAL_PHOTOS_BUCKET = "professional-photos";
 const DEFAULT_PROFESSIONAL_IMAGE =
   "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=500&fit=crop";
@@ -111,23 +113,6 @@ interface DaySchedule {
   hasLunchBreak?: boolean;
   lunchStartTime?: string;
   lunchEndTime?: string;
-}
-
-interface SiteService {
-  id: string | number;
-  name: string;
-  description: string;
-}
-
-interface SiteConfig {
-  siteName: string;
-  footerDescription: string;
-  contactEmail: string;
-  contactPhone: string;
-  servicesBadge: string;
-  servicesTitle: string;
-  servicesSubtitle: string;
-  services: SiteService[];
 }
 
 interface WorkSchedule {
@@ -234,7 +219,7 @@ const initialData: Professional[] = [
   },
   {
     id: 3,
-    name: "PatrÃ­cia Oliveira",
+    name: "Patrícia Oliveira",
     specialty: "Esteticista",
     status: "active",
     image:
@@ -282,40 +267,6 @@ const initialData: Professional[] = [
     },
   },
 ];
-
-const defaultSiteConfig: SiteConfig = {
-  siteName: "Maya Massoterapia & EstÃ©tica",
-  footerDescription:
-    "Sistema de agendamento moderno para salÃµes de beleza. Transformando a experiÃªncia de agendamento com elegÃ¢ncia e praticidade.",
-  contactEmail: "contato@mayamassoterapia.com",
-  contactPhone: "(11) 99999-9999",
-  servicesBadge: "O que oferecemos",
-  servicesTitle: "Nossos ServiÃ§os",
-  servicesSubtitle:
-    "Uma variedade de serviÃ§os para realÃ§ar sua beleza e bem-estar.",
-  services: [
-    {
-      id: 1,
-      name: "Corte e Pintura",
-      description: "TransformaÃ§Ã£o completa dos fios",
-    },
-    {
-      id: 2,
-      name: "Manicure e Pedicure",
-      description: "Cuidados completos para as unhas",
-    },
-    {
-      id: 3,
-      name: "Tratamentos Faciais",
-      description: "Limpeza e rejuvenescimento",
-    },
-    {
-      id: 4,
-      name: "Massagem Relaxante",
-      description: "Bem-estar e relaxamento",
-    },
-  ],
-};
 
 // ============================================
 // SUPABASE HELPERS
@@ -486,7 +437,7 @@ const loadWeeklyRulesFromDatabase = async () => {
     );
 
   if (error) {
-    console.warn("Agenda semanal nÃ£o carregada:", error);
+    console.warn("Agenda semanal não carregada:", error);
     return new Map<string, Record<WeekDay, WeeklyRule>>();
   }
 
@@ -529,7 +480,7 @@ const loadScheduleBlocksFromDatabase = async () => {
     .select("id,professional_id,block_date,start_time,end_time,reason");
 
   if (error) {
-    console.warn("Bloqueios de agenda nÃ£o carregados:", error);
+    console.warn("Bloqueios de agenda não carregados:", error);
     return new Map<string, ScheduleBlock[]>();
   }
 
@@ -578,9 +529,9 @@ const saveWeeklyRulesToDatabase = async (
       end_time: rule.endTime,
       interval_minutes: rule.intervalMinutes || 30,
       has_lunch_break: rule.hasLunchBreak === true,
-      // IMPORTANTE: quando o almoÃ§o nÃ£o estiver marcado, salve NULL.
-      // Assim a tela de agendamento nÃ£o deve bloquear 12:00/13:00 apenas
-      // porque existem horÃ¡rios padrÃ£o de almoÃ§o cadastrados.
+      // IMPORTANTE: quando o almoço não estiver marcado, salve NULL.
+      // Assim a tela de agendamento não deve bloquear 12:00/13:00 apenas
+      // porque existem horários padrão de almoço cadastrados.
       lunch_start: rule.hasLunchBreak === true ? rule.lunchStartTime || "12:00" : null,
       lunch_end: rule.hasLunchBreak === true ? rule.lunchEndTime || "13:00" : null,
     };
@@ -650,22 +601,11 @@ const mapDatabaseProfessional = (
 };
 
 const loadAdminStateFromDatabase = async () => {
-  const { data, error } = await supabase
-    .from(APP_STATE_TABLE)
-    .select("config")
-    .eq("id", APP_STATE_ID)
-    .maybeSingle();
-
-  if (error || !data?.config) return null;
-  return data.config as { siteConfig?: SiteConfig };
+  return { siteConfig: await loadSiteConfigFromDatabase() };
 };
 
 const saveAdminStateToDatabase = async (siteConfig: SiteConfig) => {
-  await supabase.from(APP_STATE_TABLE).upsert({
-    id: APP_STATE_ID,
-    config: { siteConfig },
-    updated_at: new Date().toISOString(),
-  });
+  await saveSiteConfigToDatabase(siteConfig);
 };
 
 const loadProfessionalsFromDatabase = async (): Promise<Professional[]> => {
@@ -883,9 +823,9 @@ const deleteProfessionalFromDatabase = async (
 // COMPONENTES AUXILIARES
 // ============================================
 
-// FunÃ§Ã£o para formatar resumo da agenda
+// Função para formatar resumo da agenda
 const formatScheduleSummary = (schedule?: WorkSchedule): string => {
-  if (!schedule) return "NÃ£o configurado";
+  if (!schedule) return "Não configurado";
 
   const days = [
     { key: "monday", label: "Seg" },
@@ -893,7 +833,7 @@ const formatScheduleSummary = (schedule?: WorkSchedule): string => {
     { key: "wednesday", label: "Qua" },
     { key: "thursday", label: "Qui" },
     { key: "friday", label: "Sex" },
-    { key: "saturday", label: "SÃ¡b" },
+    { key: "saturday", label: "Sáb" },
     { key: "sunday", label: "Dom" },
   ];
 
@@ -901,9 +841,9 @@ const formatScheduleSummary = (schedule?: WorkSchedule): string => {
     (d) => schedule[d.key as keyof WorkSchedule]?.enabled,
   );
 
-  if (enabledDays.length === 0) return "NÃ£o configurado";
+  if (enabledDays.length === 0) return "Não configurado";
 
-  // Agrupar dias com mesmo horÃ¡rio
+  // Agrupar dias com mesmo horário
   const dayGroups: { days: string[]; start: string; end: string }[] = [];
 
   enabledDays.forEach(({ key, label }) => {
@@ -919,7 +859,7 @@ const formatScheduleSummary = (schedule?: WorkSchedule): string => {
   });
 
   return dayGroups
-    .map((g) => `${g.days.join(" a ")}: ${g.start} Ã s ${g.end}`)
+    .map((g) => `${g.days.join(" a ")}: ${g.start} às ${g.end}`)
     .join(" | ");
 };
 
@@ -932,7 +872,7 @@ const formatMonthlyScheduleSummary = (
     ([, rule]) => rule.enabled,
   );
   if (enabledDays.length === 0) {
-    return "Agenda semanal nÃ£o configurada";
+    return "Agenda semanal não configurada";
   }
   const groups: { days: string[]; start: string; end: string }[] = [];
   enabledDays.forEach(([dayKey, rule]) => {
@@ -942,7 +882,7 @@ const formatMonthlyScheduleSummary = (
       wednesday: "Qua",
       thursday: "Qui",
       friday: "Sex",
-      saturday: "SÃ¡b",
+      saturday: "Sáb",
       sunday: "Dom",
     };
     const label = labelMap[dayKey];
@@ -954,7 +894,7 @@ const formatMonthlyScheduleSummary = (
       groups.push({ days: [label], start: rule.startTime, end: rule.endTime });
   });
   const summary = groups
-    .map((g) => `${g.days.join(" a ")}: ${g.start} Ã s ${g.end}`)
+    .map((g) => `${g.days.join(" a ")}: ${g.start} às ${g.end}`)
     .join(" | ");
   return `Agenda semanal: ${summary}`;
 };
@@ -1012,11 +952,11 @@ const buildAutomaticSchedules = (
 
 const weeklyDayLabels: Record<WeekDay, string> = {
   monday: "Segunda-feira",
-  tuesday: "TerÃ§a-feira",
+  tuesday: "Terça-feira",
   wednesday: "Quarta-feira",
   thursday: "Quinta-feira",
   friday: "Sexta-feira",
-  saturday: "SÃ¡bado",
+  saturday: "Sábado",
   sunday: "Domingo",
 };
 
@@ -1026,7 +966,7 @@ const dayLabels: Record<WeekDay, string> = {
   wednesday: "Qua",
   thursday: "Qui",
   friday: "Sex",
-  saturday: "SÃ¡b",
+  saturday: "Sáb",
   sunday: "Dom",
 };
 
@@ -1087,10 +1027,10 @@ const WeeklyScheduleEditor = ({
     <div className="space-y-3">
       <div className="rounded-xl border border-gold-400/20 bg-gold-400/10 px-3 py-2">
         <p className="text-xs font-semibold text-gold-300">
-          LiberaÃ§Ã£o automÃ¡tica
+          Liberação automática
         </p>
         <p className="mt-0.5 text-[11px] leading-snug text-gray-300">
-          A agenda libera de hoje atÃ© o mesmo dia do prÃ³ximo mÃªs.
+          A agenda libera de hoje até o mesmo dia do próximo mês.
         </p>
       </div>
 
@@ -1144,7 +1084,7 @@ const WeeklyScheduleEditor = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-gray-300">
-                InÃ­cio
+                Início
               </label>
               <input
                 type="time"
@@ -1199,8 +1139,8 @@ const WeeklyScheduleEditor = ({
               onChange={(event) =>
                 updateDay(openDay, {
                   hasLunchBreak: event.target.checked,
-                  // MantÃ©m os horÃ¡rios padrÃ£o apenas para quando o almoÃ§o for ativado.
-                  // Desmarcado = nÃ£o bloqueia nada.
+                  // Mantém os horários padrão apenas para quando o almoço for ativado.
+                  // Desmarcado = não bloqueia nada.
                   lunchStartTime: event.target.checked
                     ? openedRule.lunchStartTime || "12:00"
                     : openedRule.lunchStartTime,
@@ -1212,14 +1152,14 @@ const WeeklyScheduleEditor = ({
               disabled={!openedRule.enabled}
               className="h-4 w-4 rounded border-gold-400/20 text-gold-300 disabled:opacity-50 focus:ring-gold-400"
             />
-            Bloquear almoÃ§o
+            Bloquear almoço
           </label>
 
           {openedRule.hasLunchBreak && (
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-gray-300">
-                  InÃ­cio almoÃ§o
+                  Início almoço
                 </label>
                 <input
                   type="time"
@@ -1234,7 +1174,7 @@ const WeeklyScheduleEditor = ({
 
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-gray-300">
-                  Fim almoÃ§o
+                  Fim almoço
                 </label>
                 <input
                   type="time"
@@ -1318,7 +1258,7 @@ const CompactScheduleBlockForm = ({
             className="h-9 w-full rounded-xl border border-gold-400/20 bg-dark-700 px-2 text-xs text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
           >
             <option value="full-day">Dia inteiro</option>
-            <option value="time-range">HorÃ¡rio</option>
+            <option value="time-range">Horário</option>
           </select>
         </div>
       </div>
@@ -1327,7 +1267,7 @@ const CompactScheduleBlockForm = ({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="mb-1 block text-[11px] font-medium text-gray-300">
-              InÃ­cio
+              Início
             </label>
             <input
               type="time"
@@ -1404,7 +1344,7 @@ const ProfessionalModal = ({
   const [image, setImage] = useState(professional?.image || "");
   const [whatsappMessage, setWhatsappMessage] = useState(
     professional?.whatsappMessage ||
-      "OlÃ¡ {cliente}, tudo bem? ðŸ’–\n\nAqui Ã© {profissional} do Maya Massoterapia & EstÃ©tica.\nEstou entrando em contato sobre seu agendamento de {servico}, marcado para {data} Ã s {hora}.",
+      "Olá {cliente}, tudo bem? \n\nAqui é {profissional} do Mayà Massoterapia & Estética.\nEstou entrando em contato sobre seu agendamento de {servico}, marcado para {data} às {hora}.",
   );
   const [allowSimultaneousAppointments, setAllowSimultaneousAppointments] =
     useState(professional?.allowSimultaneousAppointments === true);
@@ -1423,7 +1363,7 @@ const ProfessionalModal = ({
     },
   );
   const [activeTab, setActiveTab] = useState<
-    "Dados" | "ServiÃ§os" | "Agenda semanal" | "FÃ©rias" | "Bloqueios"
+    "Dados" | "Serviços" | "Agenda semanal" | "Férias" | "Bloqueios"
   >("Dados");
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1441,13 +1381,13 @@ const ProfessionalModal = ({
   };
 
   const tabs: Array<{
-    key: "Dados" | "ServiÃ§os" | "Agenda semanal" | "FÃ©rias" | "Bloqueios";
+    key: "Dados" | "Serviços" | "Agenda semanal" | "Férias" | "Bloqueios";
     label: string;
   }> = [
     { key: "Dados", label: "Dados da profissional" },
-    { key: "ServiÃ§os", label: "ServiÃ§os" },
+    { key: "Serviços", label: "Serviços" },
     { key: "Agenda semanal", label: "Agenda semanal" },
-    { key: "FÃ©rias", label: "FÃ©rias" },
+    { key: "Férias", label: "Férias" },
     { key: "Bloqueios", label: "Bloqueios" },
   ];
 
@@ -1531,7 +1471,7 @@ const ProfessionalModal = ({
       if (rule.enabled) {
         dates.push({
           dateKey: toLocalDateKey(current),
-          label: `${formatDateLabel(current)} â€¢ ${dayLabels[dayKey]}`,
+          label: `${formatDateLabel(current)} • ${dayLabels[dayKey]}`,
         });
       }
 
@@ -1562,7 +1502,7 @@ const ProfessionalModal = ({
                 {professional ? "Editar Profissional" : "Nova Profissional"}
               </h3>
               <p className="mt-0.5 text-[11px] leading-snug text-gray-300 sm:text-sm">
-                Gerencie dados, serviÃ§os e disponibilidade.
+                Gerencie dados, serviços e disponibilidade.
               </p>
             </div>
             <button
@@ -1633,7 +1573,7 @@ const ProfessionalModal = ({
                       className="w-full rounded-xl border border-gold-400/20 px-3 py-2 text-sm outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-lg"
                     />
                     <p className="mt-1 text-[11px] leading-snug text-gray-300">
-                      VariÃ¡veis disponÃ­veis: {"{cliente}"}, {"{profissional}"}, {"{servico}"}, {"{data}"} e {"{hora}"}.
+                      Variáveis disponíveis: {"{cliente}"}, {"{profissional}"}, {"{servico}"}, {"{data}"} e {"{hora}"}.
                     </p>
                   </div>
                   <div>
@@ -1664,10 +1604,10 @@ const ProfessionalModal = ({
                       />
                       <span>
                         <span className="block font-semibold text-gray-100">
-                          Permitir atendimento simultÃ¢neo
+                          Permitir atendimento simultâneo
                         </span>
                         <span className="mt-0.5 block text-[11px] leading-snug text-gray-300">
-                          Quando ativado, esta profissional pode receber agendamento no mesmo horÃ¡rio de outra profissional.
+                          Quando ativado, esta profissional pode receber agendamento no mesmo horário de outra profissional.
                         </span>
                       </span>
                     </label>
@@ -1699,7 +1639,7 @@ const ProfessionalModal = ({
                           className="block w-full text-xs text-gray-300 file:mr-2 file:rounded-full file:border-0 file:bg-gold-400/100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-gold-300"
                         />
                         <p className="mt-1 text-[11px] text-gray-300">
-                          JPG, PNG ou WEBP. A imagem serÃ¡ salva localmente neste navegador.
+                          JPG, PNG ou WEBP. A imagem será salva localmente neste navegador.
                         </p>
                       </div>
                     </div>
@@ -1709,7 +1649,7 @@ const ProfessionalModal = ({
                       Resumo
                     </p>
                     <p className="mt-1.5 text-xs leading-snug text-gray-300 sm:text-sm">
-                      Nome, especialidade, status e imagem sÃ£o campos principais
+                      Nome, especialidade, status e imagem são campos principais
                       da profissional.
                     </p>
                   </div>
@@ -1717,10 +1657,10 @@ const ProfessionalModal = ({
               </div>
             )}
 
-            {activeTab === "ServiÃ§os" && (
+            {activeTab === "Serviços" && (
               <div className="rounded-xl border border-gold-400/20 bg-dark-800 p-3">
                 <p className="mb-2 text-xs font-semibold text-gray-200">
-                  ServiÃ§os vinculados
+                  Serviços vinculados
                 </p>
                 {professional?.services.length ? (
                   <div className="space-y-2">
@@ -1745,11 +1685,11 @@ const ProfessionalModal = ({
                   </div>
                 ) : (
                   <p className="text-xs text-gray-300">
-                    Nenhum serviÃ§o vinculado.
+                    Nenhum serviço vinculado.
                   </p>
                 )}
                 <p className="mt-2 text-[11px] text-gray-300">
-                  Adicione ou edite serviÃ§os no card da profissional.
+                  Adicione ou edite serviços no card da profissional.
                 </p>
               </div>
             )}
@@ -1761,15 +1701,15 @@ const ProfessionalModal = ({
               />
             )}
 
-            {activeTab === "FÃ©rias" && (
+            {activeTab === "Férias" && (
               <div className="space-y-6">
                 <div className="rounded-2xl border border-gold-400/20 bg-gold-400/10 p-4">
                   <p className="text-sm font-semibold text-gold-300">
-                    PerÃ­odo de fÃ©rias da profissional
+                    Período de férias da profissional
                   </p>
                   <p className="mt-1 text-sm text-gray-300">
-                    Quando marcado, a profissional nÃ£o ficarÃ¡ disponÃ­vel para
-                    agendamentos dentro do perÃ­odo escolhido. VocÃª pode
+                    Quando marcado, a profissional não ficará disponível para
+                    agendamentos dentro do período escolhido. Você pode
                     desmarcar depois caso ela decida trabalhar.
                   </p>
                 </div>
@@ -1787,13 +1727,13 @@ const ProfessionalModal = ({
                       }
                       className="h-4 w-4 rounded border-gold-400/20 text-gold-300 focus:ring-gold-400"
                     />
-                    Vai tirar fÃ©rias
+                    Vai tirar férias
                   </label>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                        InÃ­cio das fÃ©rias
+                        Início das férias
                       </label>
                       <input
                         type="date"
@@ -1811,7 +1751,7 @@ const ProfessionalModal = ({
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                        Fim das fÃ©rias
+                        Fim das férias
                       </label>
                       <input
                         type="date"
@@ -1832,7 +1772,7 @@ const ProfessionalModal = ({
                     vacation.startDate &&
                     vacation.endDate && (
                       <div className="mt-5 rounded-2xl border border-green-300/40 bg-green-950/30 p-4 text-sm text-green-300">
-                        FÃ©rias configuradas de {vacation.startDate} atÃ©{" "}
+                        Férias configuradas de {vacation.startDate} até{" "}
                         {vacation.endDate}.
                       </div>
                     )}
@@ -1840,8 +1780,8 @@ const ProfessionalModal = ({
                   {vacation.enabled &&
                     (!vacation.startDate || !vacation.endDate) && (
                       <div className="mt-5 rounded-2xl border border-gold-400/20 bg-yellow-950/20 p-4 text-sm text-gold-300">
-                        Informe a data de inÃ­cio e fim para bloquear o perÃ­odo
-                        de fÃ©rias.
+                        Informe a data de início e fim para bloquear o período
+                        de férias.
                       </div>
                     )}
                 </div>
@@ -1855,7 +1795,7 @@ const ProfessionalModal = ({
                     Bloqueios da agenda
                   </p>
                   <p className="mt-0.5 text-[11px] leading-snug text-gray-300">
-                    Bloqueie dias ou horÃ¡rios dentro da janela liberada.
+                    Bloqueie dias ou horários dentro da janela liberada.
                   </p>
                 </div>
 
@@ -1894,7 +1834,7 @@ const ProfessionalModal = ({
                               <p className="mt-0.5 text-xs text-gray-300">
                                 {block.type === "full-day"
                                   ? "Dia inteiro"
-                                  : `${block.startTime} Ã s ${block.endTime}`}
+                                  : `${block.startTime} às ${block.endTime}`}
                               </p>
                               {block.reason && (
                                 <p className="mt-1 line-clamp-2 text-[11px] text-gray-300">
@@ -1946,7 +1886,7 @@ const ProfessionalModal = ({
   );
 };
 
-// Modal para editar/adicionar serviÃ§o
+// Modal para editar/adicionar serviço
 const ServiceModal = ({
   service,
   onSave,
@@ -1970,14 +1910,14 @@ const ServiceModal = ({
       <div className="w-full max-w-[320px] overflow-hidden rounded-2xl bg-dark-700 shadow-xl">
         <div className="border-b px-4 py-3">
           <h3 className="text-sm font-semibold text-gray-100">
-            {service ? "Editar serviÃ§o" : "Novo serviÃ§o"}
+            {service ? "Editar serviço" : "Novo serviço"}
           </h3>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 p-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-300">
-              ServiÃ§o
+              Serviço
             </label>
             <input
               type="text"
@@ -1991,7 +1931,7 @@ const ServiceModal = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-300">
-                DuraÃ§Ã£o
+                Duração
               </label>
               <input
                 type="number"
@@ -2007,7 +1947,7 @@ const ServiceModal = ({
 
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-300">
-                PreÃ§o
+                Preço
               </label>
               <input
                 type="text"
@@ -2045,6 +1985,56 @@ const ServiceModal = ({
 // COMPONENTE PRINCIPAL
 // ============================================
 
+interface ContentFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  multiline?: boolean;
+}
+
+const ContentField = ({
+  label,
+  value,
+  onChange,
+  multiline = false,
+}: ContentFieldProps) => (
+  <div>
+    <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
+      {label}
+    </label>
+    {multiline ? (
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={2}
+        className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
+      />
+    ) : (
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
+      />
+    )}
+  </div>
+);
+
+const ContentSection = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) => (
+  <section className="rounded-2xl border border-gold-400/20 bg-dark-800 p-4">
+    <h3 className="mb-4 text-sm font-semibold text-gold-300 sm:text-base">
+      {title}
+    </h3>
+    {children}
+  </section>
+);
+
 const Admin = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] =
@@ -2066,8 +2056,8 @@ const Admin = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(defaultSiteConfig);
   const [siteConfigSaved, setSiteConfigSaved] = useState(false);
   const [adminSection, setAdminSection] = useState<
-    "site" | "home" | "professionals" | "appointments" | "blocked-clients"
-  >("site");
+    "content" | "professionals" | "appointments" | "blocked-clients"
+  >("content");
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [databaseMessage, setDatabaseMessage] = useState("");
 
@@ -2119,14 +2109,14 @@ const Admin = () => {
       setAppointments(databaseAppointments);
       setBlockedClients(databaseBlockedClients);
       setBlockedProfessionalId((current) => current || databaseProfessionals[0]?.id || "");
-      setSiteConfig(databaseState?.siteConfig || defaultSiteConfig);
+      setSiteConfig(normalizeSiteConfig(databaseState?.siteConfig));
     } catch (error) {
       console.error("Erro ao carregar dados locais:", error);
       setProfessionals([]);
       setAppointments([]);
       setSiteConfig(defaultSiteConfig);
       setDatabaseMessage(
-        "NÃ£o consegui carregar os dados locais.",
+        "Não consegui carregar os dados locais.",
       );
     } finally {
       setIsLoadingData(false);
@@ -2174,7 +2164,7 @@ const Admin = () => {
         .delete()
         .eq("id", appointmentId);
       if (error) throw error;
-      setDatabaseMessage("Agendamento excluÃ­do.");
+      setDatabaseMessage("Agendamento excluído.");
     } catch (error) {
       console.error("Erro ao excluir agendamento:", error);
       setAppointments(previousAppointments);
@@ -2185,13 +2175,13 @@ const Admin = () => {
     const cleanPhone = normalizePhone(appointment.phone);
 
     if (!cleanPhone) {
-      setDatabaseMessage("NÃ£o foi possÃ­vel bloquear: telefone invÃ¡lido.");
+      setDatabaseMessage("Não foi possível bloquear: telefone inválido.");
       return;
     }
 
     if (
       !confirm(
-        `Bloquear este cliente para ${appointment.professionalName}? Ele nÃ£o conseguirÃ¡ mais agendar com esta profissional.`,
+        `Bloquear este cliente para ${appointment.professionalName}? Ele não conseguirá mais agendar com esta profissional.`,
       )
     )
       return;
@@ -2207,7 +2197,7 @@ const Admin = () => {
       if (searchError) throw searchError;
 
       if (existingBlock) {
-        setDatabaseMessage("Este telefone jÃ¡ estÃ¡ bloqueado para esta profissional.");
+        setDatabaseMessage("Este telefone já está bloqueado para esta profissional.");
         return;
       }
 
@@ -2231,7 +2221,7 @@ const Admin = () => {
     const cleanPhone = normalizePhone(blockedPhone);
 
     if (!blockedProfessionalId || !cleanPhone) {
-      setDatabaseMessage("Escolha a profissional e informe um telefone vÃ¡lido.");
+      setDatabaseMessage("Escolha a profissional e informe um telefone válido.");
       return;
     }
 
@@ -2248,7 +2238,7 @@ const Admin = () => {
       if (searchError) throw searchError;
 
       if (existingBlock) {
-        setDatabaseMessage("Este telefone jÃ¡ estÃ¡ bloqueado para esta profissional.");
+        setDatabaseMessage("Este telefone já está bloqueado para esta profissional.");
         return;
       }
 
@@ -2293,7 +2283,7 @@ const Admin = () => {
     }
   };
 
-  // FunÃ§Ãµes de filtro
+  // Funções de filtro
   const clearProfessionalFilters = () => {
     setProfessionalDateFilter("");
   };
@@ -2309,7 +2299,7 @@ const Admin = () => {
     setCreatedAtFilter("");
   };
 
-  // Obter opÃ§Ãµes Ãºnicas para filtros
+  // Obter opções únicas para filtros
   const getUniqueProfessionals = () => {
     const unique = new Set(appointments.map((a) => a.professionalName));
     return Array.from(unique).sort();
@@ -2364,17 +2354,17 @@ const Admin = () => {
     return appointments.filter((appointment) => appointment.date === date);
   };
 
-  // FunÃ§Ã£o de exportaÃ§Ã£o CSV
+  // Função de exportação CSV
   const exportToCSV = () => {
     const filteredAppointments = getFilteredAppointments();
     const headers = [
       "Cliente",
       "Telefone",
       "Profissional",
-      "ServiÃ§o",
+      "Serviço",
       "Data",
-      "HorÃ¡rio",
-      "DuraÃ§Ã£o",
+      "Horário",
+      "Duração",
       "Criado em",
     ];
     const rows = filteredAppointments.map((appointment) => [
@@ -2412,6 +2402,34 @@ const Admin = () => {
     setSiteConfigSaved(false);
   };
 
+  const updateSiteSection = <K extends keyof SiteConfig>(
+    section: K,
+    update: Partial<SiteConfig[K]>,
+  ) => {
+    setSiteConfig((current) => ({
+      ...current,
+      [section]: {
+        ...(current[section] as Record<string, unknown>),
+        ...update,
+      },
+    }));
+    setSiteConfigSaved(false);
+  };
+
+  const updateProfessionalText = (
+    professionalId: string | number,
+    update: Pick<Partial<Professional>, "name" | "specialty">,
+  ) => {
+    setProfessionals((current) =>
+      current.map((professional) =>
+        String(professional.id) === String(professionalId)
+          ? { ...professional, ...update }
+          : professional,
+      ),
+    );
+    setSiteConfigSaved(false);
+  };
+
   const updateSiteService = (
     serviceId: string | number,
     update: Partial<SiteService>,
@@ -2427,39 +2445,58 @@ const Admin = () => {
 
   const handleSaveSiteConfig = async () => {
     try {
-      await saveAdminStateToDatabase(siteConfig);
+      const normalizedConfig = normalizeSiteConfig(siteConfig);
+
+      await saveAdminStateToDatabase(normalizedConfig);
+
+      await Promise.all(
+        professionals.map((professional) =>
+          supabase
+            .from("professionals")
+            .update({
+              name: professional.name?.trim() || defaultSiteConfig.messages.professionalFallbackName,
+              specialty:
+                professional.specialty?.trim() ||
+                defaultSiteConfig.messages.professionalFallbackSpecialty,
+            })
+            .eq("id", String(professional.id)),
+        ),
+      );
+
+      setSiteConfig(normalizedConfig);
       setSiteConfigSaved(true);
-      setDatabaseMessage("ConfiguraÃ§Ãµes salvas localmente.");
+      setDatabaseMessage("Configurações salvas localmente.");
       window.setTimeout(() => setSiteConfigSaved(false), 2500);
     } catch (error) {
-      console.error("Erro ao salvar configuraÃ§Ãµes:", error);
-      setDatabaseMessage("Erro ao salvar configuraÃ§Ãµes.");
+      console.error("Erro ao salvar configurações:", error);
+      setDatabaseMessage("Erro ao salvar configurações.");
     }
   };
 
   const handleResetSiteConfig = async () => {
     if (
       !confirm(
-        "Tem certeza que deseja restaurar as informaÃ§Ãµes padrÃ£o do site?",
+        "Tem certeza que deseja restaurar as informações padrão do site?",
       )
     )
       return;
 
-    setSiteConfig(defaultSiteConfig);
+    const normalizedDefault = normalizeSiteConfig(defaultSiteConfig);
+    setSiteConfig(normalizedDefault);
 
     try {
-      await saveAdminStateToDatabase(defaultSiteConfig);
+      await saveAdminStateToDatabase(normalizedDefault);
       setSiteConfigSaved(true);
-      setDatabaseMessage("ConfiguraÃ§Ãµes padrÃ£o salvas localmente.");
+      setDatabaseMessage("Configurações padrão salvas localmente.");
       window.setTimeout(() => setSiteConfigSaved(false), 2500);
     } catch (error) {
-      console.error("Erro ao restaurar configuraÃ§Ãµes:", error);
-      setDatabaseMessage("Erro ao restaurar configuraÃ§Ãµes.");
+      console.error("Erro ao restaurar configurações:", error);
+      setDatabaseMessage("Erro ao restaurar configurações.");
     }
   };
 
   // ============================================
-  // SINCRONIZAÃ‡ÃƒO COM BANCO
+  // SINCRONIZAÇÃO COM BANCO
   // ============================================
 
   const reloadProfessionals = async () => {
@@ -2468,13 +2505,13 @@ const Admin = () => {
   };
 
   // ============================================
-  // RESETAR PARA DADOS PADRÃƒO
+  // RESETAR PARA DADOS PADRÃO
   // ============================================
 
   const handleResetToDefault = async () => {
     if (
       !confirm(
-        "Tem certeza que deseja restaurar os dados padrÃ£o? Todos as alteraÃ§Ãµes serÃ£o perdidas.",
+        "Tem certeza que deseja restaurar os dados padrão? Todos as alterações serão perdidas.",
       )
     )
       return;
@@ -2517,11 +2554,11 @@ const Admin = () => {
 
       await reloadProfessionals();
       setSelectedProfessional(null);
-      setDatabaseMessage("Dados padrÃ£o restaurados localmente.");
+      setDatabaseMessage("Dados padrão restaurados localmente.");
     } catch (error) {
-      console.error("Erro ao restaurar dados padrÃ£o:", error);
+      console.error("Erro ao restaurar dados padrão:", error);
       setProfessionals([]);
-      setDatabaseMessage("Erro ao restaurar dados padrÃ£o.");
+      setDatabaseMessage("Erro ao restaurar dados padrão.");
     }
   };
 
@@ -2590,7 +2627,7 @@ const Admin = () => {
       await refreshAppointments();
       setDatabaseMessage(
         isValidUuid(id)
-          ? "Profissional excluÃ­da localmente."
+          ? "Profissional excluída localmente."
           : "Profissional antiga removida da tela. Recarregue para atualizar os dados locais.",
       );
     } catch (error) {
@@ -2603,7 +2640,7 @@ const Admin = () => {
   };
 
   // ============================================
-  // HANDLERS - SERVIÃ‡OS
+  // HANDLERS - SERVIÇOS
   // ============================================
 
   const handleAddService = (professionalId: string | number) => {
@@ -2648,16 +2685,16 @@ const Admin = () => {
 
       setShowServiceModal(false);
       setEditingService(null);
-      setDatabaseMessage("ServiÃ§o salvo localmente.");
+      setDatabaseMessage("Serviço salvo localmente.");
     } catch (error) {
-      console.error("Erro ao salvar serviÃ§o:", error);
-      setDatabaseMessage("Erro ao salvar serviÃ§o.");
+      console.error("Erro ao salvar serviço:", error);
+      setDatabaseMessage("Erro ao salvar serviço.");
     }
   };
 
   const handleDeleteService = async (serviceId: string | number) => {
     if (!selectedProfessional) return;
-    if (!confirm("Tem certeza que deseja excluir este serviÃ§o?")) return;
+    if (!confirm("Tem certeza que deseja excluir este serviço?")) return;
 
     const previousProfessionals = professionals;
     const updatedProfessionals = professionals.map((p) =>
@@ -2680,11 +2717,11 @@ const Admin = () => {
       if (error) throw error;
 
       await reloadProfessionals();
-      setDatabaseMessage("ServiÃ§o excluÃ­do localmente.");
+      setDatabaseMessage("Serviço excluído localmente.");
     } catch (error) {
-      console.error("Erro ao excluir serviÃ§o:", error);
+      console.error("Erro ao excluir serviço:", error);
       setProfessionals(previousProfessionals);
-      setDatabaseMessage("Erro ao excluir serviÃ§o.");
+      setDatabaseMessage("Erro ao excluir serviço.");
     }
   };
 
@@ -2724,15 +2761,15 @@ const Admin = () => {
                 Painel Administrativo
               </h1>
               <p className="mt-1 max-w-[190px] text-xs leading-relaxed text-gray-300 sm:max-w-none sm:text-sm">
-                Gerencie profissionais e seus serviÃ§os
+                Gerencie profissionais e seus serviços
               </p>
             </div>
-            <a
-              href="/"
+            <Link
+              to="/"
               className="shrink-0 rounded-full bg-gold-400/10 px-3 py-1.5 text-xs font-semibold text-gold-300 hover:bg-gold-400/15 hover:text-gold-300 sm:text-sm"
             >
-              â† Site
-            </a>
+              ← Site
+            </Link>
           </div>
         </div>
       </div>
@@ -2741,11 +2778,10 @@ const Admin = () => {
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="flex gap-2 overflow-x-auto py-3">
             {[
+              { key: "content", label: "Conteúdo do Site" },
               { key: "professionals", label: "Profissionais" },
               { key: "appointments", label: "Agendamentos" },
               { key: "blocked-clients", label: "Clientes bloqueados" },
-              { key: "site", label: "Site e contato" },
-              { key: "home", label: "Textos da Home" },
             ].map((section) => (
               <button
                 key={section.key}
@@ -2771,7 +2807,7 @@ const Admin = () => {
           <div
             className={`rounded-2xl border p-3 text-xs sm:text-sm ${
               databaseMessage.includes("Erro") ||
-              databaseMessage.includes("NÃ£o consegui")
+              databaseMessage.includes("Não consegui")
                 ? "border-red-400/30 bg-red-950/40 text-red-400"
                 : "border-gold-400/20 bg-gold-400/10 text-gold-300"
             }`}
@@ -2781,17 +2817,17 @@ const Admin = () => {
         </div>
       )}
 
-      {/* ConfiguraÃ§Ãµes do Site */}
-      {adminSection === "site" && (
+      {/* Conteúdo do Site */}
+      {adminSection === "content" && (
         <div className="mx-auto max-w-7xl px-3 pt-5 sm:px-6 sm:pt-8 lg:px-8">
           <div className="rounded-2xl border border-gold-400/20 bg-dark-700 p-4 shadow-sm sm:rounded-3xl sm:p-6">
             <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-gray-100 sm:text-lg">
-                  ConfiguraÃ§Ãµes do site
+                  Conteúdo do Site
                 </h2>
                 <p className="text-xs text-gray-300 sm:text-sm">
-                  Edite nome do site, rodapÃ© e informaÃ§Ãµes de contato.
+                  Edite os textos públicos exibidos para clientes.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2800,214 +2836,1064 @@ const Admin = () => {
                   onClick={handleResetSiteConfig}
                   className="rounded-full border border-gold-400/20 bg-dark-700 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-dark-800 sm:px-4 sm:text-sm"
                 >
-                  Restaurar padrÃ£o
+                  Restaurar padrão
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveSiteConfig}
                   className="rounded-full bg-gold-400/100 px-3 py-2 text-xs font-semibold text-white hover:bg-gold-300 sm:px-4 sm:text-sm"
                 >
-                  Salvar configuraÃ§Ãµes
+                  Salvar Alterações
                 </button>
               </div>
             </div>
 
             {siteConfigSaved && (
               <div className="mb-4 rounded-2xl border border-green-300/40 bg-green-950/30 p-3 text-sm text-green-300">
-                ConfiguraÃ§Ãµes salvas com sucesso.
+                Configurações salvas com sucesso.
               </div>
             )}
 
-            <div className="grid gap-4 lg:grid-cols-2 sm:gap-5">
-              <div className="space-y-2.5 sm:space-y-4">
-                <h3 className="text-sm font-semibold text-gray-100">
-                  Identidade do site
-                </h3>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    Nome do site
-                  </label>
-                  <input
-                    type="text"
+            <div className="space-y-4 sm:space-y-5">
+              <ContentSection title="Cabeçalho">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Nome da empresa"
                     value={siteConfig.siteName}
-                    onChange={(event) =>
-                      updateSiteConfig({ siteName: event.target.value })
-                    }
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
+                    onChange={(value) => updateSiteConfig({ siteName: value })}
                   />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    DescriÃ§Ã£o do rodapÃ©
-                  </label>
-                  <textarea
-                    value={siteConfig.footerDescription}
-                    onChange={(event) =>
-                      updateSiteConfig({
-                        footerDescription: event.target.value,
+                  <ContentField
+                    label="Sufixo do título do navegador"
+                    value={siteConfig.header.browserTitleSuffix}
+                    onChange={(value) =>
+                      updateSiteSection("header", {
+                        browserTitleSuffix: value,
                       })
                     }
-                    rows={2}
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
                   />
-                </div>
-              </div>
-
-              <div className="space-y-2.5 sm:space-y-4">
-                <h3 className="text-sm font-semibold text-gray-100">Contato</h3>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    E-mail
-                  </label>
-                  <input
-                    type="email"
-                    value={siteConfig.contactEmail}
-                    onChange={(event) =>
-                      updateSiteConfig({ contactEmail: event.target.value })
+                  <ContentField
+                    label="Menu Início"
+                    value={siteConfig.header.navHome}
+                    onChange={(value) =>
+                      updateSiteSection("header", { navHome: value })
                     }
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
                   />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    Telefone
-                  </label>
-                  <input
-                    type="text"
-                    value={siteConfig.contactPhone}
-                    onChange={(event) =>
-                      updateSiteConfig({ contactPhone: event.target.value })
+                  <ContentField
+                    label="Menu Profissionais"
+                    value={siteConfig.header.navProfessionals}
+                    onChange={(value) =>
+                      updateSiteSection("header", {
+                        navProfessionals: value,
+                      })
                     }
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
+                  />
+                  <ContentField
+                    label="Menu Serviços"
+                    value={siteConfig.header.navServices}
+                    onChange={(value) =>
+                      updateSiteSection("header", { navServices: value })
+                    }
+                  />
+                  <ContentField
+                    label="Menu Agendamento"
+                    value={siteConfig.header.navBooking}
+                    onChange={(value) =>
+                      updateSiteSection("header", { navBooking: value })
+                    }
+                  />
+                  <ContentField
+                    label="Login"
+                    value={siteConfig.header.login}
+                    onChange={(value) =>
+                      updateSiteSection("header", { login: value })
+                    }
+                  />
+                  <ContentField
+                    label="Sair"
+                    value={siteConfig.header.logout}
+                    onChange={(value) =>
+                      updateSiteSection("header", { logout: value })
+                    }
+                  />
+                  <ContentField
+                    label="Admin"
+                    value={siteConfig.header.admin}
+                    onChange={(value) =>
+                      updateSiteSection("header", { admin: value })
+                    }
+                  />
+                  <ContentField
+                    label="Agenda"
+                    value={siteConfig.header.agenda}
+                    onChange={(value) =>
+                      updateSiteSection("header", { agenda: value })
+                    }
+                  />
+                  <ContentField
+                    label="Notificações"
+                    value={siteConfig.header.notifications}
+                    onChange={(value) =>
+                      updateSiteSection("header", { notifications: value })
+                    }
+                  />
+                  <ContentField
+                    label="Acessibilidade: abrir menu"
+                    value={siteConfig.header.openMenuAria}
+                    onChange={(value) =>
+                      updateSiteSection("header", { openMenuAria: value })
+                    }
+                  />
+                  <ContentField
+                    label="Acessibilidade: fechar menu"
+                    value={siteConfig.header.closeMenuAria}
+                    onChange={(value) =>
+                      updateSiteSection("header", { closeMenuAria: value })
+                    }
                   />
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+              </ContentSection>
 
-      {adminSection === "home" && (
-        <div className="mx-auto max-w-7xl px-3 pt-5 sm:px-6 sm:pt-8 lg:px-8">
-          <div className="rounded-2xl border border-gold-400/20 bg-dark-700 p-4 shadow-sm sm:rounded-3xl sm:p-6">
-            <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-gray-100 sm:text-lg">
-                  Textos da Home
-                </h2>
-                <p className="text-xs text-gray-300 sm:text-sm">
-                  Edite a seÃ§Ã£o de serviÃ§os exibida na pÃ¡gina inicial.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetSiteConfig}
-                  className="rounded-full border border-gold-400/20 bg-dark-700 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-dark-800 sm:px-4 sm:text-sm"
-                >
-                  Restaurar padrÃ£o
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveSiteConfig}
-                  className="rounded-full bg-gold-400/100 px-3 py-2 text-xs font-semibold text-white hover:bg-gold-300 sm:px-4 sm:text-sm"
-                >
-                  Salvar configuraÃ§Ãµes
-                </button>
-              </div>
-            </div>
+              <ContentSection title="Home">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Selo da home"
+                    value={siteConfig.home.heroBadge}
+                    onChange={(value) =>
+                      updateSiteSection("home", { heroBadge: value })
+                    }
+                  />
+                  <ContentField
+                    label="Título - início"
+                    value={siteConfig.home.heroTitleStart}
+                    onChange={(value) =>
+                      updateSiteSection("home", { heroTitleStart: value })
+                    }
+                  />
+                  <ContentField
+                    label="Título - destaque"
+                    value={siteConfig.home.heroTitleHighlight}
+                    onChange={(value) =>
+                      updateSiteSection("home", {
+                        heroTitleHighlight: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Título - final"
+                    value={siteConfig.home.heroTitleEnd}
+                    onChange={(value) =>
+                      updateSiteSection("home", { heroTitleEnd: value })
+                    }
+                  />
+                  <ContentField
+                    label="Slogan / subtítulo"
+                    value={siteConfig.home.heroSubtitle}
+                    onChange={(value) =>
+                      updateSiteSection("home", { heroSubtitle: value })
+                    }
+                    multiline
+                  />
+                  <ContentField
+                    label="CTA - título"
+                    value={siteConfig.home.ctaTitle}
+                    onChange={(value) =>
+                      updateSiteSection("home", { ctaTitle: value })
+                    }
+                  />
+                  <ContentField
+                    label="CTA - subtítulo"
+                    value={siteConfig.home.ctaSubtitle}
+                    onChange={(value) =>
+                      updateSiteSection("home", { ctaSubtitle: value })
+                    }
+                    multiline
+                  />
+                </div>
+              </ContentSection>
 
-            {siteConfigSaved && (
-              <div className="mb-4 rounded-2xl border border-green-300/40 bg-green-950/30 p-3 text-sm text-green-300">
-                ConfiguraÃ§Ãµes salvas com sucesso.
-              </div>
-            )}
+              <ContentSection title="Profissionais">
+                <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Selo da seção"
+                    value={siteConfig.home.professionalsBadge}
+                    onChange={(value) =>
+                      updateSiteSection("home", {
+                        professionalsBadge: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Título da seção"
+                    value={siteConfig.home.professionalsTitle}
+                    onChange={(value) =>
+                      updateSiteSection("home", {
+                        professionalsTitle: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Subtítulo da seção"
+                    value={siteConfig.home.professionalsSubtitle}
+                    onChange={(value) =>
+                      updateSiteSection("home", {
+                        professionalsSubtitle: value,
+                      })
+                    }
+                    multiline
+                  />
+                </div>
 
-            <div className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    Etiqueta acima do tÃ­tulo
-                  </label>
-                  <input
-                    type="text"
+                <div className="grid gap-3 md:grid-cols-2">
+                  {professionals.map((professional, index) => (
+                    <div
+                      key={professional.id}
+                      className="rounded-xl border border-gold-400/20 bg-dark-700 p-3 sm:rounded-2xl sm:p-4"
+                    >
+                      <p className="mb-3 text-xs font-semibold text-gray-200 sm:text-sm">
+                        Card {index + 1}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <ContentField
+                          label="Nome do card"
+                          value={professional.name}
+                          onChange={(value) =>
+                            updateProfessionalText(professional.id, {
+                              name: value,
+                            })
+                          }
+                        />
+                        <ContentField
+                          label="Especialidade"
+                          value={professional.specialty}
+                          onChange={(value) =>
+                            updateProfessionalText(professional.id, {
+                              specialty: value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ContentSection>
+
+              <ContentSection title="Serviços">
+                <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Selo da seção"
                     value={siteConfig.servicesBadge}
-                    onChange={(event) =>
-                      updateSiteConfig({ servicesBadge: event.target.value })
+                    onChange={(value) =>
+                      updateSiteConfig({ servicesBadge: value })
                     }
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
                   />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    TÃ­tulo
-                  </label>
-                  <input
-                    type="text"
+                  <ContentField
+                    label="Título da seção"
                     value={siteConfig.servicesTitle}
-                    onChange={(event) =>
-                      updateSiteConfig({ servicesTitle: event.target.value })
+                    onChange={(value) =>
+                      updateSiteConfig({ servicesTitle: value })
                     }
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
                   />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                    SubtÃ­tulo
-                  </label>
-                  <textarea
+                  <ContentField
+                    label="Subtítulo da seção"
                     value={siteConfig.servicesSubtitle}
-                    onChange={(event) =>
-                      updateSiteConfig({ servicesSubtitle: event.target.value })
+                    onChange={(value) =>
+                      updateSiteConfig({ servicesSubtitle: value })
                     }
-                    rows={1}
-                    className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:rounded-2xl sm:px-4 sm:py-3"
+                    multiline
                   />
                 </div>
-              </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                {siteConfig.services.map((service, index) => (
-                  <div
-                    key={service.id}
-                    className="rounded-xl border border-gold-400/20 bg-dark-800 p-3 sm:rounded-2xl sm:p-4"
-                  >
-                    <p className="mb-2 text-xs font-semibold text-gray-200 sm:text-sm">
-                      Card {index + 1}
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        value={service.name}
-                        onChange={(event) =>
-                          updateSiteService(service.id, {
-                            name: event.target.value,
+                <div className="grid gap-3 md:grid-cols-2">
+                  {siteConfig.services.map((service, index) => (
+                    <div
+                      key={service.id}
+                      className="rounded-xl border border-gold-400/20 bg-dark-700 p-3 sm:rounded-2xl sm:p-4"
+                    >
+                      <p className="mb-3 text-xs font-semibold text-gray-200 sm:text-sm">
+                        Card {index + 1}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <ContentField
+                          label="Nome do serviço"
+                          value={service.name}
+                          onChange={(value) =>
+                            updateSiteService(service.id, { name: value })
+                          }
+                        />
+                        <ContentField
+                          label="Descrição"
+                          value={service.description}
+                          onChange={(value) =>
+                            updateSiteService(service.id, {
+                              description: value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ContentSection>
+
+              <ContentSection title="Rodapé">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Descrição do rodapé"
+                    value={siteConfig.footerDescription}
+                    onChange={(value) =>
+                      updateSiteConfig({ footerDescription: value })
+                    }
+                    multiline
+                  />
+                  <ContentField
+                    label="Título dos links rápidos"
+                    value={siteConfig.footer.quickLinksTitle}
+                    onChange={(value) =>
+                      updateSiteSection("footer", {
+                        quickLinksTitle: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Link Início"
+                    value={siteConfig.footer.quickHome}
+                    onChange={(value) =>
+                      updateSiteSection("footer", { quickHome: value })
+                    }
+                  />
+                  <ContentField
+                    label="Link Profissionais"
+                    value={siteConfig.footer.quickProfessionals}
+                    onChange={(value) =>
+                      updateSiteSection("footer", {
+                        quickProfessionals: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Link Serviços"
+                    value={siteConfig.footer.quickServices}
+                    onChange={(value) =>
+                      updateSiteSection("footer", { quickServices: value })
+                    }
+                  />
+                  <ContentField
+                    label="Link Agendamento"
+                    value={siteConfig.footer.quickBooking}
+                    onChange={(value) =>
+                      updateSiteSection("footer", { quickBooking: value })
+                    }
+                  />
+                  <ContentField
+                    label="Título de contato"
+                    value={siteConfig.footer.contactTitle}
+                    onChange={(value) =>
+                      updateSiteSection("footer", { contactTitle: value })
+                    }
+                  />
+                  <ContentField
+                    label="E-mail"
+                    value={siteConfig.contactEmail}
+                    onChange={(value) =>
+                      updateSiteConfig({ contactEmail: value })
+                    }
+                  />
+                  <ContentField
+                    label="Telefone"
+                    value={siteConfig.contactPhone}
+                    onChange={(value) =>
+                      updateSiteConfig({ contactPhone: value })
+                    }
+                  />
+                  <ContentField
+                    label="Texto de copyright"
+                    value={siteConfig.footer.copyrightSuffix}
+                    onChange={(value) =>
+                      updateSiteSection("footer", {
+                        copyrightSuffix: value,
+                      })
+                    }
+                  />
+                </div>
+              </ContentSection>
+
+              <ContentSection title="Botões">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <ContentField
+                    label="Agendar agora"
+                    value={siteConfig.buttons.scheduleNow}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { scheduleNow: value })
+                    }
+                  />
+                  <ContentField
+                    label="Ver profissionais"
+                    value={siteConfig.buttons.viewProfessionals}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", {
+                        viewProfessionals: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Meus agendamentos"
+                    value={siteConfig.buttons.myAppointments}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { myAppointments: value })
+                    }
+                  />
+                  <ContentField
+                    label="Ver agenda"
+                    value={siteConfig.buttons.viewSchedule}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { viewSchedule: value })
+                    }
+                  />
+                  <ContentField
+                    label="Agendar horário"
+                    value={siteConfig.buttons.scheduleTime}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { scheduleTime: value })
+                    }
+                  />
+                  <ContentField
+                    label="Fazer agendamento"
+                    value={siteConfig.buttons.makeAppointment}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { makeAppointment: value })
+                    }
+                  />
+                  <ContentField
+                    label="Cancelar agendamento"
+                    value={siteConfig.buttons.cancelAppointment}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", {
+                        cancelAppointment: value,
+                      })
+                    }
+                  />
+                  <ContentField
+                    label="Voltar"
+                    value={siteConfig.buttons.backToSite}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { backToSite: value })
+                    }
+                  />
+                  <ContentField
+                    label="Confirmar agendamento"
+                    value={siteConfig.buttons.confirmBooking}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { confirmBooking: value })
+                    }
+                  />
+                  <ContentField
+                    label="Salvando"
+                    value={siteConfig.buttons.saving}
+                    onChange={(value) =>
+                      updateSiteSection("buttons", { saving: value })
+                    }
+                  />
+                </div>
+              </ContentSection>
+
+              <ContentSection title="Mensagens Gerais">
+                <div className="space-y-5">
+                  <div>
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Avisos e padrões
+                    </h4>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <ContentField
+                        label="Toast - título"
+                        value={siteConfig.messages.bookingToastTitle}
+                        onChange={(value) =>
+                          updateSiteSection("messages", {
+                            bookingToastTitle: value,
                           })
                         }
-                        placeholder="Nome do serviÃ§o"
-                        className="w-full rounded-xl border border-gold-400/20 bg-dark-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
                       />
-                      <input
-                        type="text"
-                        value={service.description}
-                        onChange={(event) =>
-                          updateSiteService(service.id, {
-                            description: event.target.value,
+                      <ContentField
+                        label="Toast - descrição"
+                        value={siteConfig.messages.bookingToastDescription}
+                        onChange={(value) =>
+                          updateSiteSection("messages", {
+                            bookingToastDescription: value,
                           })
                         }
-                        placeholder="DescriÃ§Ã£o"
-                        className="w-full rounded-xl border border-gold-400/20 bg-dark-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
+                        multiline
+                      />
+                      <ContentField
+                        label="Nome profissional fallback"
+                        value={siteConfig.messages.professionalFallbackName}
+                        onChange={(value) =>
+                          updateSiteSection("messages", {
+                            professionalFallbackName: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Especialidade fallback"
+                        value={
+                          siteConfig.messages.professionalFallbackSpecialty
+                        }
+                        onChange={(value) =>
+                          updateSiteSection("messages", {
+                            professionalFallbackSpecialty: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Acessibilidade: fechar aviso"
+                        value={siteConfig.messages.closeNoticeAria}
+                        onChange={(value) =>
+                          updateSiteSection("messages", {
+                            closeNoticeAria: value,
+                          })
+                        }
                       />
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  <div>
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Modal de agendamento
+                    </h4>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <ContentField
+                        label="Selo"
+                        value={siteConfig.bookingModal.eyebrow}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            eyebrow: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Título"
+                        value={siteConfig.bookingModal.title}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", { title: value })
+                        }
+                      />
+                      <ContentField
+                        label="Subtítulo"
+                        value={siteConfig.bookingModal.subtitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            subtitle: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Título: dados do cliente"
+                        value={siteConfig.bookingModal.clientDataTitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            clientDataTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Label nome"
+                        value={siteConfig.bookingModal.nameLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            nameLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Placeholder nome"
+                        value={siteConfig.bookingModal.namePlaceholder}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            namePlaceholder: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Label telefone"
+                        value={siteConfig.bookingModal.phoneLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            phoneLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Placeholder telefone"
+                        value={siteConfig.bookingModal.phonePlaceholder}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            phonePlaceholder: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Título seleção"
+                        value={siteConfig.bookingModal.selectionTitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectionTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Label profissional"
+                        value={siteConfig.bookingModal.professionalLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            professionalLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Label serviço"
+                        value={siteConfig.bookingModal.serviceLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            serviceLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Sem serviços"
+                        value={siteConfig.bookingModal.noServices}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            noServices: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Título data e horário"
+                        value={siteConfig.bookingModal.dateTimeTitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            dateTimeTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Subtítulo data e horário"
+                        value={siteConfig.bookingModal.dateTimeSubtitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            dateTimeSubtitle: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Label data"
+                        value={siteConfig.bookingModal.dateLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            dateLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Label horário"
+                        value={siteConfig.bookingModal.timeLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            timeLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Sem datas"
+                        value={siteConfig.bookingModal.noDates}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", { noDates: value })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Selecione data primeiro"
+                        value={siteConfig.bookingModal.selectDateFirst}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectDateFirst: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Sem horários"
+                        value={siteConfig.bookingModal.noTimes}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", { noTimes: value })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Título resumo"
+                        value={siteConfig.bookingModal.summaryTitle}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            summaryTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Resumo: profissional"
+                        value={siteConfig.bookingModal.summaryProfessionalLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            summaryProfessionalLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Resumo: serviço"
+                        value={siteConfig.bookingModal.summaryServiceLabel}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            summaryServiceLabel: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Selecione serviço"
+                        value={siteConfig.bookingModal.selectService}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectService: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Prefixo data escolhida"
+                        value={siteConfig.bookingModal.selectedDatePrefix}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectedDatePrefix: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Selecione data disponível"
+                        value={siteConfig.bookingModal.selectAvailableDate}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectAvailableDate: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Prefixo horário escolhido"
+                        value={siteConfig.bookingModal.selectedTimePrefix}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectedTimePrefix: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Selecione horário disponível"
+                        value={siteConfig.bookingModal.selectAvailableTime}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            selectAvailableTime: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Sufixo de dias disponíveis"
+                        value={siteConfig.bookingModal.availableDaysSuffix}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            availableDaysSuffix: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Acessibilidade: fechar modal"
+                        value={siteConfig.bookingModal.closeAria}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            closeAria: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Erro campos obrigatórios"
+                        value={siteConfig.bookingModal.requiredError}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            requiredError: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Erro conflito horário"
+                        value={siteConfig.bookingModal.conflictError}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            conflictError: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Erro conflito telefone"
+                        value={siteConfig.bookingModal.phoneConflictError}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            phoneConflictError: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Erro cliente bloqueado"
+                        value={siteConfig.bookingModal.blockedError}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            blockedError: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Erro ao salvar"
+                        value={siteConfig.bookingModal.saveError}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            saveError: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Status indisponível"
+                        value={siteConfig.bookingModal.statusUnavailable}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            statusUnavailable: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status férias"
+                        value={siteConfig.bookingModal.statusVacation}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            statusVacation: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status bloqueado"
+                        value={siteConfig.bookingModal.statusBlocked}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            statusBlocked: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status parcial"
+                        value={siteConfig.bookingModal.statusPartial}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            statusPartial: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status disponível"
+                        value={siteConfig.bookingModal.statusAvailable}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            statusAvailable: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Motivo sem horários"
+                        value={siteConfig.bookingModal.noSlotsReason}
+                        onChange={(value) =>
+                          updateSiteSection("bookingModal", {
+                            noSlotsReason: value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Meus agendamentos
+                    </h4>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <ContentField
+                        label="Título"
+                        value={siteConfig.appointmentsPage.title}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            title: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Subtítulo"
+                        value={siteConfig.appointmentsPage.subtitle}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            subtitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Título do card de telefone"
+                        value={siteConfig.appointmentsPage.phoneCardTitle}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            phoneCardTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Descrição do card de telefone"
+                        value={
+                          siteConfig.appointmentsPage.phoneCardDescription
+                        }
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            phoneCardDescription: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Placeholder telefone"
+                        value={siteConfig.appointmentsPage.phonePlaceholder}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            phonePlaceholder: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Erro telefone inválido"
+                        value={siteConfig.appointmentsPage.invalidPhoneError}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            invalidPhoneError: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Erro ao buscar"
+                        value={siteConfig.appointmentsPage.searchError}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            searchError: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Confirmação de cancelamento"
+                        value={siteConfig.appointmentsPage.cancelConfirm}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            cancelConfirm: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Cancelamento com sucesso"
+                        value={siteConfig.appointmentsPage.cancelSuccess}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            cancelSuccess: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Erro ao cancelar"
+                        value={siteConfig.appointmentsPage.cancelError}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            cancelError: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Título vazio"
+                        value={siteConfig.appointmentsPage.emptyTitle}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            emptyTitle: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Descrição vazio"
+                        value={siteConfig.appointmentsPage.emptyDescription}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            emptyDescription: value,
+                          })
+                        }
+                        multiline
+                      />
+                      <ContentField
+                        label="Resultado singular"
+                        value={siteConfig.appointmentsPage.foundSingular}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            foundSingular: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Resultado plural"
+                        value={siteConfig.appointmentsPage.foundPlural}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            foundPlural: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status confirmado"
+                        value={siteConfig.appointmentsPage.statusConfirmed}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            statusConfirmed: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status cancelado"
+                        value={siteConfig.appointmentsPage.statusCanceled}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            statusCanceled: value,
+                          })
+                        }
+                      />
+                      <ContentField
+                        label="Status agendado"
+                        value={siteConfig.appointmentsPage.statusScheduled}
+                        onChange={(value) =>
+                          updateSiteSection("appointmentsPage", {
+                            statusScheduled: value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </ContentSection>
             </div>
           </div>
         </div>
@@ -3038,7 +3924,7 @@ const Admin = () => {
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                Restaurar dados padrÃ£o
+                Restaurar dados padrão
               </button>
               <button
                 onClick={handleAddProfessional}
@@ -3096,11 +3982,11 @@ const Admin = () => {
                         {professional.specialty}
                       </p>
                       <p className="mt-1 text-xs text-gold-300 sm:text-sm">
-                        {professional.services.length} serviÃ§o(s) vinculado(s)
+                        {professional.services.length} serviço(s) vinculado(s)
                       </p>
                       {professional.allowSimultaneousAppointments && (
                         <span className="mt-1 inline-flex rounded-full bg-gold-400/10 px-2 py-0.5 text-[11px] font-semibold text-gold-300">
-                          Atendimento simultÃ¢neo liberado
+                          Atendimento simultâneo liberado
                         </span>
                       )}
                       <p className="mt-2 flex items-start gap-1 break-words text-[11px] leading-relaxed text-gray-300 sm:text-xs">
@@ -3132,7 +4018,7 @@ const Admin = () => {
                       }}
                       className="rounded-full px-2 py-1.5 text-center text-xs text-gold-300 transition-colors hover:bg-gold-400/10 sm:px-3 sm:text-sm"
                     >
-                      Ver serviÃ§os
+                      Ver serviços
                     </button>
                     <button
                       onClick={() => handleEditProfessional(professional)}
@@ -3149,25 +4035,25 @@ const Admin = () => {
                   </div>
                 </div>
 
-                {/* ServiÃ§os da Profissional Selecionada */}
+                {/* Serviços da Profissional Selecionada */}
                 {String(selectedProfessional?.id) ===
                   String(professional.id) && (
                   <div className="mt-4 border-t pt-4">
                     <div className="mb-3 flex flex-col gap-2">
                       <h4 className="text-sm font-semibold text-gray-200">
-                        ServiÃ§os de {professional.name}
+                        Serviços de {professional.name}
                       </h4>
                       <button
                         onClick={() => handleAddService(professional.id)}
                         className="w-full rounded-full bg-gold-400/10 px-3 py-2 text-center text-xs font-semibold text-gold-300 hover:bg-gold-400/15"
                       >
-                        + Adicionar serviÃ§o
+                        + Adicionar serviço
                       </button>
                     </div>
 
                     {professional.services.length === 0 ? (
                       <p className="rounded-xl bg-dark-800 p-3 text-xs italic text-gray-300">
-                        Nenhum serviÃ§o cadastrado para esta profissional.
+                        Nenhum serviço cadastrado para esta profissional.
                       </p>
                     ) : (
                       <div className="space-y-2">
@@ -3183,7 +4069,7 @@ const Admin = () => {
                                 </h5>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-300">
                                   <span>{service.duration}</span>
-                                  <span>â€¢</span>
+                                  <span>•</span>
                                   <span className="font-medium text-gray-200">
                                     {service.price}
                                   </span>
@@ -3268,7 +4154,7 @@ const Admin = () => {
                     className="w-full rounded-xl border border-gold-400/20 bg-dark-800 px-3 py-2 text-sm outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
                   />
                   <p className="mt-1 text-[11px] text-gray-300">
-                    O sistema salva apenas os nÃºmeros, sem mÃ¡scara.
+                    O sistema salva apenas os números, sem máscara.
                   </p>
                 </div>
 
@@ -3333,7 +4219,7 @@ const Admin = () => {
                             {client.phone}
                           </p>
                           <p className="mt-1 text-xs text-gray-300">
-                            Profissional: {client.professionalName || "NÃ£o informada"}
+                            Profissional: {client.professionalName || "Não informada"}
                           </p>
                           {client.reason && (
                             <p className="mt-1 text-xs text-gray-300">
@@ -3510,19 +4396,19 @@ const Admin = () => {
                                   </div>
                                   <div>
                                     <p className="text-xs text-gray-300 sm:text-sm">
-                                      ServiÃ§o
+                                      Serviço
                                     </p>
                                     <p className="text-sm font-medium text-gray-100">
-                                      {appointment.serviceName} â€¢{" "}
+                                      {appointment.serviceName} •{" "}
                                       {getServiceDuration(appointment)}
                                     </p>
                                   </div>
                                   <div>
                                     <p className="text-xs text-gray-300 sm:text-sm">
-                                      Data / HorÃ¡rio
+                                      Data / Horário
                                     </p>
                                     <p className="text-sm font-medium text-gray-100">
-                                      {appointment.date} â€¢ {appointment.time}
+                                      {appointment.date} • {appointment.time}
                                     </p>
                                   </div>
                                 </div>
@@ -3607,14 +4493,14 @@ const Admin = () => {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                        ServiÃ§o
+                        Serviço
                       </label>
                       <select
                         value={serviceFilter}
                         onChange={(e) => setServiceFilter(e.target.value)}
                         className="w-full rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-2 text-sm text-gray-100 outline-none transition focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
                       >
-                        <option value="">Todos os serviÃ§os</option>
+                        <option value="">Todos os serviços</option>
                         {getUniqueServices().map((service) => (
                           <option key={service} value={service}>
                             {service}
@@ -3635,7 +4521,7 @@ const Admin = () => {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                        HorÃ¡rio
+                        Horário
                       </label>
                       <input
                         type="text"
@@ -3647,14 +4533,14 @@ const Admin = () => {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-200 sm:text-sm">
-                        DuraÃ§Ã£o
+                        Duração
                       </label>
                       <select
                         value={durationFilter}
                         onChange={(e) => setDurationFilter(e.target.value)}
                         className="w-full rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-2 text-sm text-gray-100 outline-none transition focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30"
                       >
-                        <option value="">Todas as duraÃ§Ãµes</option>
+                        <option value="">Todas as durações</option>
                         {getUniqueDurations().map((duration) => (
                           <option key={duration} value={duration}>
                             {duration}
@@ -3677,7 +4563,7 @@ const Admin = () => {
                 </div>
               </div>
 
-              {/* Tabela e botÃ£o de exportaÃ§Ã£o */}
+              {/* Tabela e botão de exportação */}
               <div className="rounded-2xl border border-gold-400/20 bg-dark-700 p-4 sm:rounded-3xl sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base font-semibold text-gray-100 sm:text-lg">
@@ -3718,22 +4604,22 @@ const Admin = () => {
                           Profissional
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
-                          ServiÃ§o
+                          Serviço
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
                           Data
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
-                          HorÃ¡rio
+                          Horário
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
-                          DuraÃ§Ã£o
+                          Duração
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
                           Criado em
                         </th>
                         <th className="px-4 py-3 font-medium text-gray-300 uppercase">
-                          AÃ§Ãµes
+                          Ações
                         </th>
                       </tr>
                     </thead>
@@ -3813,7 +4699,7 @@ const Admin = () => {
         />
       )}
 
-      {/* Modal de ServiÃ§o */}
+      {/* Modal de Serviço */}
       {showServiceModal && selectedProfessional && (
         <ServiceModal
           service={editingService}

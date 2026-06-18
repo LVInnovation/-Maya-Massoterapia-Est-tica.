@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { SiteConfig } from '../../content/siteContent';
+import { clearAuthentication, isAuthenticated } from '../../lib/auth';
 
 interface NavbarProps {
+  content: SiteConfig;
   onNavigate?: (section: string) => void;
 }
 
-const navItems = [
-  { label: 'Início', section: 'home' },
-  { label: 'Profissionais', section: 'professionals' },
-  { label: 'Serviços', section: 'services' },
-  { label: 'Agendamento', section: 'booking' },
-];
-
-const isAuthenticated = () => sessionStorage.getItem('maya_auth') === 'true'
-
-const Navbar = ({ onNavigate }: NavbarProps) => {
+const Navbar = ({ content, onNavigate }: NavbarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const navItems = [
+    { label: content.header.navHome, section: 'home' },
+    { label: content.header.navProfessionals, section: 'professionals' },
+    { label: content.header.navServices, section: 'services' },
+    { label: content.header.navBooking, section: 'booking' },
+  ];
 
   const isAdminPage =
     location.pathname === '/admin' ||
@@ -31,11 +31,14 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
 
     if (location.pathname === '/') {
       onNavigate?.(section);
+      return;
     }
+
+    navigate('/', { state: { scrollTo: section } });
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('maya_auth');
+    clearAuthentication();
     setMenuOpen(false);
     navigate('/');
   };
@@ -49,9 +52,10 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
           <Link
             to="/"
             onClick={() => setMenuOpen(false)}
-            className="font-serif text-2xl font-bold text-gold-400 sm:text-3xl transition-colors duration-300 hover:text-gold-300"
+            className="w-[11rem] shrink-0 font-serif text-base font-bold leading-tight text-gold-400 transition-colors duration-300 hover:text-gold-300 sm:w-auto sm:text-3xl"
           >
-            Maya Massoterapia & Estética
+            <span className="block break-words sm:hidden">{content.siteName}</span>
+            <span className="hidden sm:inline">{content.siteName}</span>
           </Link>
 
           {/* MENU DESKTOP */}
@@ -73,21 +77,21 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                   to="/admin"
                   className="text-sm font-medium uppercase tracking-wide text-gray-300 transition-colors duration-200 hover:text-gold-400"
                 >
-                  Admin
+                  {content.header.admin}
                 </Link>
 
                 <Link
                   to="/agenda"
                   className="text-sm font-medium uppercase tracking-wide text-gray-300 transition-colors duration-200 hover:text-gold-400"
                 >
-                  Agenda
+                  {content.header.agenda}
                 </Link>
 
                 <Link
                   to="/notificacoes"
                   className="text-sm font-medium uppercase tracking-wide text-gray-300 transition-colors duration-200 hover:text-gold-400"
                 >
-                  Notificações
+                  {content.header.notifications}
                 </Link>
               </>
             )}
@@ -97,10 +101,10 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
           <div className="hidden items-center gap-3 md:flex">
             <button
               type="button"
-              onClick={() => onNavigate?.('booking')}
+              onClick={() => handleNavClick('booking')}
               className="rounded-full bg-gold-400 px-6 py-2 text-sm font-semibold text-dark-800 transition-all duration-300 hover:bg-gold-300 hover:shadow-gold-glow"
             >
-              Agendar agora
+              {content.buttons.scheduleNow}
             </button>
 
             {loggedIn ? (
@@ -109,14 +113,14 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                 onClick={handleLogout}
                 className="rounded-full border border-gold-400 px-5 py-2 text-sm font-medium text-gold-400 transition-all duration-300 hover:bg-gold-400/10 hover:shadow-gold-glow"
               >
-                Sair
+                {content.header.logout}
               </button>
             ) : (
               <Link
                 to="/login"
                 className="rounded-full border border-gold-400 px-5 py-2 text-sm font-medium text-gold-400 transition-all duration-300 hover:bg-gold-400/10 hover:shadow-gold-glow"
               >
-                Login
+                {content.header.login}
               </Link>
             )}
           </div>
@@ -129,21 +133,26 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                 onClick={handleLogout}
                 className="rounded-full border border-gold-400 px-3 py-1.5 text-xs font-medium text-gold-400 transition-all duration-300 hover:bg-gold-400/10"
               >
-                Sair
+                {content.header.logout}
               </button>
             ) : (
               <Link
                 to="/login"
+                onClick={() => setMenuOpen(false)}
                 className="rounded-full border border-gold-400 px-3 py-1.5 text-xs font-medium text-gold-400 transition-all duration-300 hover:bg-gold-400/10"
               >
-                Login
+                {content.header.login}
               </Link>
             )}
 
             <button
               type="button"
               onClick={() => setMenuOpen((current) => !current)}
-              aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-label={
+                menuOpen
+                  ? content.header.closeMenuAria
+                  : content.header.openMenuAria
+              }
               aria-expanded={menuOpen}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gold-400 transition hover:bg-dark-700"
             >
@@ -182,7 +191,7 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                     onClick={() => setMenuOpen(false)}
                     className="rounded-2xl px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gold-400/10 hover:text-gold-400"
                   >
-                    Admin
+                    {content.header.admin}
                   </Link>
 
                   <Link
@@ -190,7 +199,7 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                     onClick={() => setMenuOpen(false)}
                     className="rounded-2xl px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gold-400/10 hover:text-gold-400"
                   >
-                    Agenda
+                    {content.header.agenda}
                   </Link>
 
                   <Link
@@ -198,7 +207,7 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                     onClick={() => setMenuOpen(false)}
                     className="rounded-2xl px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gold-400/10 hover:text-gold-400"
                   >
-                    Notificações
+                    {content.header.notifications}
                   </Link>
                 </>
               )}
@@ -208,7 +217,7 @@ const Navbar = ({ onNavigate }: NavbarProps) => {
                 onClick={() => handleNavClick('booking')}
                 className="mt-2 rounded-full bg-gold-400 px-4 py-3 text-sm font-semibold text-dark-800 transition-all hover:bg-gold-300 hover:shadow-gold-glow"
               >
-                Agendar agora
+                {content.buttons.scheduleNow}
               </button>
             </div>
           </div>

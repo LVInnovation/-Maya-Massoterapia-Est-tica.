@@ -1,16 +1,10 @@
+import { SiteConfig } from '../../content/siteContent';
+
 interface FooterProps {
-  siteName: string;
-  footerDescription: string;
-  contactEmail: string;
-  contactPhone: string;
+  content: SiteConfig;
 }
 
-const Footer = ({
-  siteName,
-  footerDescription,
-  contactEmail,
-  contactPhone,
-}: FooterProps) => {
+const Footer = ({ content }: FooterProps) => {
   const currentYear = new Date().getFullYear();
 
   return (
@@ -20,18 +14,18 @@ const Footer = ({
           {/* Coluna 1 - Marca */}
           <div>
             <h3 className="text-xl font-serif font-bold text-gold-400 mb-4">
-              {siteName}
+              {content.siteName}
             </h3>
 
             <p className="text-gray-400 text-sm leading-relaxed">
-              {footerDescription}
+              {content.footerDescription}
             </p>
           </div>
 
           {/* Coluna 2 - Links Rápidos */}
           <div>
             <h4 className="text-gray-200 font-semibold mb-6 uppercase tracking-wide text-sm">
-              Links Rápidos
+              {content.footer.quickLinksTitle}
             </h4>
 
             <ul className="space-y-3">
@@ -40,7 +34,7 @@ const Footer = ({
                   href="#home"
                   className="text-gray-400 hover:text-gold-400 text-sm transition-colors duration-200"
                 >
-                  Início
+                  {content.footer.quickHome}
                 </a>
               </li>
 
@@ -49,7 +43,7 @@ const Footer = ({
                   href="#professionals"
                   className="text-gray-400 hover:text-gold-400 text-sm transition-colors duration-200"
                 >
-                  Profissionais
+                  {content.footer.quickProfessionals}
                 </a>
               </li>
 
@@ -58,7 +52,7 @@ const Footer = ({
                   href="#services"
                   className="text-gray-400 hover:text-gold-400 text-sm transition-colors duration-200"
                 >
-                  Serviços
+                  {content.footer.quickServices}
                 </a>
               </li>
 
@@ -67,7 +61,7 @@ const Footer = ({
                   href="#booking"
                   className="text-gray-400 hover:text-gold-400 text-sm transition-colors duration-200"
                 >
-                  Agendamento
+                  {content.footer.quickBooking}
                 </a>
               </li>
             </ul>
@@ -76,7 +70,7 @@ const Footer = ({
           {/* Coluna 3 - Contato */}
           <div>
             <h4 className="text-gray-200 font-semibold mb-6 uppercase tracking-wide text-sm">
-              Contato
+              {content.footer.contactTitle}
             </h4>
 
             <ul className="space-y-3 text-sm">
@@ -95,7 +89,7 @@ const Footer = ({
                   />
                 </svg>
 
-                <span className="text-gray-400">{contactEmail}</span>
+                <span className="text-gray-400">{content.contactEmail}</span>
               </li>
 
               <li className="flex items-center gap-3">
@@ -113,7 +107,7 @@ const Footer = ({
                   />
                 </svg>
 
-                <span className="text-gray-400">{contactPhone}</span>
+                <span className="text-gray-400">{content.contactPhone}</span>
               </li>
             </ul>
           </div>
@@ -122,7 +116,7 @@ const Footer = ({
         {/* Divisor e Copyright */}
         <div className="border-t border-gold-400/10 mt-12 pt-8">
           <p className="text-center text-gray-500 text-sm">
-            © {currentYear} {siteName}. Todos os direitos reservados.
+            © {currentYear} {content.siteName}. {content.footer.copyrightSuffix}
           </p>
         </div>
       </div>

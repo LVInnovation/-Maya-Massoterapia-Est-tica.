@@ -1,5 +1,5 @@
 interface Professional {
-  id: number;
+  id: string | number;
   name: string;
   specialty: string;
   image: string;
@@ -7,11 +7,17 @@ interface Professional {
 
 interface ProfessionalCardProps {
   professional: Professional;
-  onViewSchedule: (professionalId: number) => void;
+  actionLabel: string;
+  fallbackName: string;
+  fallbackSpecialty: string;
+  onViewSchedule: (professionalId: string | number) => void;
 }
 
 const ProfessionalCard = ({
   professional,
+  actionLabel,
+  fallbackName,
+  fallbackSpecialty,
   onViewSchedule,
 }: ProfessionalCardProps) => {
   const defaultImage =
@@ -31,11 +37,11 @@ const ProfessionalCard = ({
 
       <div className="p-6 text-center sm:p-6 md:p-7">
         <h3 className="mb-2 text-lg font-semibold text-gray-100 sm:text-xl font-serif">
-          {professional.name}
+          {professional.name || fallbackName}
         </h3>
 
         <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-gold-400 sm:mb-5 sm:text-sm">
-          {professional.specialty}
+          {professional.specialty || fallbackSpecialty}
         </p>
 
         <button
@@ -43,7 +49,7 @@ const ProfessionalCard = ({
           onClick={() => onViewSchedule(professional.id)}
           className="inline-flex items-center justify-center rounded-full bg-gold-400 px-6 py-2.5 text-xs font-semibold text-dark-900 transition-all duration-300 hover:bg-gold-300 hover:shadow-gold-glow sm:px-6 sm:text-sm"
         >
-          Ver agenda
+          {actionLabel}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useCallback } from 'react'
 import { supabase } from '../services/supabase'
 
 interface Professional {
@@ -179,7 +180,7 @@ const Agenda = () => {
     },
   )
 
-  const loadAgenda = async () => {
+  const loadAgenda = useCallback(async () => {
     try {
       setLoading(true)
       setMessage('')
@@ -291,11 +292,11 @@ const Agenda = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedDate])
 
   useEffect(() => {
     loadAgenda()
-  }, [selectedDate])
+  }, [loadAgenda])
 
   const openAppointment = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
@@ -388,9 +389,9 @@ const Agenda = () => {
       (item) => String(item.id) === String(selectedAppointment.professionalId),
     )
 
-    const professionalName = professional?.name || 'Maya Massoterapia & Estética'
+    const professionalName = professional?.name || 'Mayà Massoterapia & Estética'
     const defaultTemplate =
-      'Olá {cliente}, tudo bem? Aqui é {profissional} do Maya Massoterapia & Estética. Estou entrando em contato sobre seu agendamento de {servico}, marcado para {data} às {hora}.'
+      'Olá {cliente}, tudo bem? Aqui é {profissional} do Mayà Massoterapia & Estética. Estou entrando em contato sobre seu agendamento de {servico}, marcado para {data} às {hora}.'
 
     const text = fillTemplate(professional?.whatsappMessage || defaultTemplate, {
       cliente: selectedAppointment.clientName,
@@ -588,9 +589,9 @@ const Agenda = () => {
   return (
     <div className="min-h-screen bg-dark-800">
       <div className="border-b bg-dark-700 shadow-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-100">Agenda Maya Massoterapia & Estética</h1>
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold leading-tight text-gray-100 sm:text-3xl">Agenda Mayà Massoterapia & Estética</h1>
             <p className="text-sm text-gray-300">
               Painel moderno de visualização diária dos horários
             </p>
@@ -598,7 +599,7 @@ const Agenda = () => {
 
           <Link
             to="/"
-            className="rounded-full bg-gold-400/10 px-4 py-2 text-sm font-semibold text-gold-300 hover:bg-gold-400/15"
+            className="w-fit rounded-full bg-gold-400/10 px-4 py-2 text-sm font-semibold text-gold-300 hover:bg-gold-400/15"
           >
             ← Site
           </Link>
@@ -1127,4 +1128,3 @@ const Agenda = () => {
 }
 
 export default Agenda
-

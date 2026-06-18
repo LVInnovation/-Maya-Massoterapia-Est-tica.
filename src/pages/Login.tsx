@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { setAuthenticated } from '../lib/auth'
 
 const ADMIN_USER = 'Maya'
 const ADMIN_PASS = '21092003'
@@ -10,6 +11,15 @@ const Login = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const state = location.state as
+    | { from?: { pathname?: string; search?: string } }
+    | null
+  const fromPath =
+    state?.from?.pathname && state.from.pathname !== '/login'
+      ? `${state.from.pathname}${state.from.search ?? ''}`
+      : '/admin'
 
   const handleLogin = () => {
     setError('')
@@ -23,8 +33,8 @@ const Login = () => {
 
     setTimeout(() => {
       if (username === ADMIN_USER && password === ADMIN_PASS) {
-        sessionStorage.setItem('maya_auth', 'true')
-        navigate('/')
+        setAuthenticated()
+        navigate(fromPath, { replace: true })
       } else {
         setError('Usuário ou senha incorretos.')
       }
@@ -42,7 +52,7 @@ const Login = () => {
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <h1 className="font-serif text-3xl font-bold text-gold-400">Maya Massoterapia & Estética</h1>
+          <h1 className="font-serif text-3xl font-bold text-gold-400">Mayà Massoterapia & Estética</h1>
           <p className="mt-1 text-sm text-gray-400">Área restrita — funcionárias</p>
         </div>
 
@@ -58,10 +68,11 @@ const Login = () => {
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-300">
+              <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-gray-300">
                 Usuário
               </label>
               <input
+                id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -73,10 +84,11 @@ const Login = () => {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-300">
+              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-300">
                 Senha
               </label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -106,12 +118,12 @@ const Login = () => {
 
         {/* Voltar */}
         <div className="mt-4 text-center">
-          <a
-            href="/"
+          <Link
+            to="/"
             className="text-sm text-gray-400 transition hover:text-gold-400"
           >
             ← Voltar para o site
-          </a>
+          </Link>
         </div>
 
       </div>

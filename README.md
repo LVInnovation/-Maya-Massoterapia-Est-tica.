@@ -1,4 +1,4 @@
-# ✨ Maya Massoterapia & Estética
+# ✨ Mayà Massoterapia & Estética
 
 Sistema de agendamento desenvolvido para clínicas de estética, massoterapia e bem-estar.
 
@@ -168,7 +168,7 @@ Em desenvolvimento e evolução contínua.
 
 ---
 
-## © Maya Massoterapia & Estética
+## © Mayà Massoterapia & Estética
 
 Sistema desenvolvido para gerenciamento de atendimentos e agendamentos com foco em experiência premium e praticidade.
 

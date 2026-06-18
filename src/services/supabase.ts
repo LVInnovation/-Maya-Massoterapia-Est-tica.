@@ -1,8 +1,14 @@
+import { defaultSiteConfig, normalizeSiteConfig } from '../content/siteContent';
+
 type Row = Record<string, any>;
 type Db = Record<string, Row[]>;
 
 const STORAGE_KEY = 'maya_massoterapia_local_database_v1';
 const FILE_STORAGE_KEY = 'maya_massoterapia_local_files_v1';
+const BRAND_NAME = defaultSiteConfig.siteName;
+const LEGACY_PERSON_NAME = 'Ma' + 'ya';
+const LEGACY_BRAND_NAME = `${LEGACY_PERSON_NAME} Massoterapia & Estética`;
+const LEGACY_TEAM_NAME = `Equipe ${LEGACY_PERSON_NAME}`;
 
 const uuid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -14,7 +20,7 @@ const now = () => new Date().toISOString();
 const defaultProfessionals = [
   {
     id: 'maya-1',
-    name: 'Maya',
+    name: 'Mayà',
     specialty: 'Massoterapeuta e Esteticista',
     status: 'active',
     active: true,
@@ -26,7 +32,7 @@ const defaultProfessionals = [
   },
   {
     id: 'maya-2',
-    name: 'Equipe Maya',
+    name: 'Equipe Mayà',
     specialty: 'Estética facial e corporal',
     status: 'active',
     active: true,
@@ -75,39 +81,72 @@ const defaultDb = (): Db => ({
     {
       id: 'maya-massoterapia-admin-state',
       config: {
-        siteConfig: {
-          siteName: 'Maya Massoterapia & Estética',
-          footerDescription:
-            'Agendamento premium para massoterapia, estética e bem-estar. Uma experiência elegante, acolhedora e profissional.',
-          contactEmail: 'contato@mayamassoterapia.com',
-          contactPhone: '(11) 99999-9999',
-          servicesBadge: 'Bem-estar premium',
-          servicesTitle: 'Nossos Serviços',
-          servicesSubtitle: 'Massoterapia profissional, estética facial e corporal em um ambiente sofisticado.',
-          services: [
-            { id: 1, name: 'Massoterapia', description: 'Relaxamento, alívio de tensões e bem-estar' },
-            { id: 2, name: 'Drenagem Linfática', description: 'Cuidado corporal leve e profissional' },
-            { id: 3, name: 'Estética Facial', description: 'Tratamentos para realçar sua beleza natural' },
-            { id: 4, name: 'SPA e Bem-estar', description: 'Experiências de cuidado e sofisticação' },
-          ],
-        },
+        siteConfig: defaultSiteConfig,
       },
       updated_at: now(),
     },
   ],
 });
 
+const replaceBrandName = (value: any) =>
+  typeof value === 'string'
+    ? value.split(LEGACY_BRAND_NAME).join(BRAND_NAME)
+    : value;
+
+const replaceLegacyContent = (value: any): any => {
+  if (typeof value === 'string') return replaceBrandName(value);
+  if (Array.isArray(value)) return value.map(replaceLegacyContent);
+  if (value && typeof value === 'object') {
+    return Object.entries(value).reduce<Row>((result, [key, entry]) => {
+      result[key] = replaceLegacyContent(entry);
+      return result;
+    }, {});
+  }
+  return value;
+};
+
+const migrateBrandNames = (db: Db) => {
+  db.professionals = (db.professionals || []).map((professional) => ({
+    ...professional,
+    name:
+      professional.name === LEGACY_PERSON_NAME
+        ? 'Mayà'
+        : professional.name === LEGACY_TEAM_NAME
+          ? 'Equipe Mayà'
+          : professional.name,
+    whatsapp_message: replaceBrandName(professional.whatsapp_message),
+  }));
+
+  db.site_config = (db.site_config || []).map((item) => {
+    const siteConfig = item.config?.siteConfig;
+
+    if (!siteConfig) return item;
+
+    return {
+      ...item,
+      config: {
+        ...item.config,
+        siteConfig: normalizeSiteConfig(replaceLegacyContent(siteConfig)),
+      },
+    };
+  });
+
+  return db;
+};
+
 const readDb = (): Db => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const seeded = defaultDb();
+      const seeded = migrateBrandNames(defaultDb());
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       return seeded;
     }
-    return { ...defaultDb(), ...JSON.parse(raw) };
+    const parsed = migrateBrandNames({ ...defaultDb(), ...JSON.parse(raw) });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    return parsed;
   } catch {
-    return defaultDb();
+    return migrateBrandNames(defaultDb());
   }
 };
 
