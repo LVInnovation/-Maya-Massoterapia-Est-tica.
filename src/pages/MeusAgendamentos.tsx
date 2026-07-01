@@ -32,6 +32,42 @@ type DatabaseAppointment = {
   services: { name: string | null; duration: number | string | null } | null
 }
 
+type PackageStatus = 'ativo' | 'finalizado' | 'vencido' | 'cancelado'
+
+interface ClientPackage {
+  id: string
+  clientName: string
+  phone: string
+  normalizedPhone: string
+  packageName: string
+  packageCode: string
+  totalSessions: number
+  sessionsUsed: number
+  purchaseDate: string
+  expirationDate: string
+  status: PackageStatus
+  serviceNames: string[]
+}
+
+type DatabaseClientPackage = {
+  id: string
+  client_name: string | null
+  phone: string | null
+  normalized_phone: string | null
+  package_name: string | null
+  package_code: string | null
+  total_sessions: number | string | null
+  sessions_used: number | string | null
+  purchase_date: string | null
+  expiration_date: string | null
+  status: string | null
+}
+
+type DatabasePackageServiceLink = {
+  package_id: string | number | null
+  services: { name: string | null } | null
+}
+
 const onlyDigits = (value?: string | null) => String(value || '').replace(/\D/g, '')
 
 const normalizePhone = (value?: string | null) => {
@@ -98,6 +134,71 @@ const getStatusLabel = (status: string | undefined, content: SiteConfig) => {
     default:
       return content.appointmentsPage.statusScheduled
   }
+}
+
+const formatShortDate = (value?: string) => {
+  if (!value) return '-'
+
+  try {
+    return new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T00:00:00`))
+  } catch {
+    return value
+  }
+}
+
+const normalizePackageCode = (value?: string | null) => String(value || '').trim().toUpperCase()
+
+const todayKey = () => new Date().toISOString().slice(0, 10)
+
+const toPackageStatus = (value?: string | null): PackageStatus => {
+  if (value === 'finalizado' || value === 'vencido' || value === 'cancelado') return value
+  return 'ativo'
+}
+
+const getSessionsRemaining = (item: Pick<ClientPackage, 'totalSessions' | 'sessionsUsed'>) =>
+  Math.max(0, item.totalSessions - item.sessionsUsed)
+
+const resolvePackageStatus = (item: ClientPackage): PackageStatus => {
+  if (item.status === 'cancelado' || item.status === 'finalizado') return item.status
+  if (getSessionsRemaining(item) === 0) return 'finalizado'
+  if (item.expirationDate && item.expirationDate < todayKey()) return 'vencido'
+  return 'ativo'
+}
+
+const packageStatusLabels: Record<PackageStatus, string> = {
+  ativo: 'Ativo',
+  finalizado: 'Finalizado',
+  vencido: 'Vencido',
+  cancelado: 'Cancelado',
+}
+
+const packageStatusStyles: Record<PackageStatus, string> = {
+  ativo: 'border-green-400/30 bg-green-400/10 text-green-300',
+  finalizado: 'border-gold-400/30 bg-gold-400/10 text-gold-300',
+  vencido: 'border-orange-300/30 bg-orange-300/10 text-orange-200',
+  cancelado: 'border-red-400/30 bg-red-400/10 text-red-300',
+}
+
+const mapPackageRow = (
+  row: DatabaseClientPackage,
+  serviceNames: string[],
+): ClientPackage => {
+  const item: ClientPackage = {
+    id: String(row.id),
+    clientName: row.client_name || '',
+    phone: row.phone || '',
+    normalizedPhone: row.normalized_phone || normalizePhone(row.phone),
+    packageName: row.package_name || '',
+    packageCode: row.package_code || '',
+    totalSessions: Number(row.total_sessions || 0),
+    sessionsUsed: Number(row.sessions_used || 0),
+    purchaseDate: row.purchase_date || '',
+    expirationDate: row.expiration_date || '',
+    status: toPackageStatus(row.status),
+    serviceNames,
+  }
+
+  return { ...item, status: resolvePackageStatus(item) }
 }
 
 
@@ -168,9 +269,12 @@ const returnPackageSessionIfAllowed = async (appointment: Appointment) => {
 const MeusAgendamentos = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(defaultSiteConfig)
   const [phone, setPhone] = useState('')
+  const [packageCode, setPackageCode] = useState('')
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [clientPackages, setClientPackages] = useState<ClientPackage[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [searchedPhone, setSearchedPhone] = useState(false)
   const [error, setError] = useState('')
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [cancelSuccess, setCancelSuccess] = useState('')
@@ -196,11 +300,18 @@ const MeusAgendamentos = () => {
     setPhone(formatPhone(e.target.value))
   }
 
+  const handlePackageCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPackageCode(e.target.value.toUpperCase())
+  }
+
   const searchAppointments = async () => {
     const digits = normalizePhone(phone)
+    const typedPackageCode = normalizePackageCode(packageCode)
+    const shouldSearchByPhone = digits.length >= 8
+    const shouldSearchByCode = Boolean(typedPackageCode)
 
-    if (digits.length < 8) {
-      setError(siteConfig.appointmentsPage.invalidPhoneError)
+    if (!shouldSearchByPhone && !shouldSearchByCode) {
+      setError('Digite um telefone valido ou informe o codigo do pacote.')
       return
     }
 
@@ -208,34 +319,58 @@ const MeusAgendamentos = () => {
     setError('')
     setCancelSuccess('')
     setSearched(false)
+    setSearchedPhone(shouldSearchByPhone)
 
     try {
-      // Busca todos os agendamentos nao cancelados e filtra o telefone no app.
-      // Isso evita erro quando o telefone esta salvo com mascara, sem mascara,
-      // com DDD, sem DDD ou com codigo 55.
-      const { data, error: supabaseError } = await supabase
-        .from('maya_appointments')
-        .select(`
-          id,
-          client_name,
-          phone,
-          client_phone,
-          appointment_date,
-          appointment_time,
-          status,
-          package_id,
-          session_debited,
-          professionals:maya_professional(name),
-          services:maya_services(name, duration)
-        `)
-        .not('status', 'in', '(cancelado,canceled)')
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true })
+      const appointmentsRequest = shouldSearchByPhone
+        ? supabase
+            .from('maya_appointments')
+            .select(`
+              id,
+              client_name,
+              phone,
+              client_phone,
+              appointment_date,
+              appointment_time,
+              status,
+              package_id,
+              session_debited,
+              professionals:maya_professional(name),
+              services:maya_services(name, duration)
+            `)
+            .not('status', 'in', '(cancelado,canceled)')
+            .order('appointment_date', { ascending: true })
+            .order('appointment_time', { ascending: true })
+        : Promise.resolve({ data: [] as DatabaseAppointment[], error: null })
 
-      if (supabaseError) throw supabaseError
+      const phonePackagesRequest = shouldSearchByPhone
+        ? supabase
+            .from('maya_client_packages')
+            .select('*')
+            .eq('normalized_phone', digits)
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as DatabaseClientPackage[], error: null })
 
-      const mapped: Appointment[] = ((data || []) as unknown as DatabaseAppointment[])
-        .filter((item) => phonesMatch(item.phone, digits) || phonesMatch(item.client_phone, digits))
+      const codePackageRequest = shouldSearchByCode
+        ? supabase
+            .from('maya_client_packages')
+            .select('*')
+            .eq('package_code', typedPackageCode)
+            .maybeSingle()
+        : Promise.resolve({ data: null as DatabaseClientPackage | null, error: null })
+
+      const [appointmentsResponse, phonePackagesResponse, codePackageResponse] = await Promise.all([
+        appointmentsRequest,
+        phonePackagesRequest,
+        codePackageRequest,
+      ])
+
+      if (appointmentsResponse.error) throw appointmentsResponse.error
+      if (phonePackagesResponse.error) throw phonePackagesResponse.error
+      if (codePackageResponse.error) throw codePackageResponse.error
+
+      const mapped: Appointment[] = ((appointmentsResponse.data || []) as unknown as DatabaseAppointment[])
+        .filter((item) => !shouldSearchByPhone || phonesMatch(item.phone, digits) || phonesMatch(item.client_phone, digits))
         .map((item) => ({
           id: item.id,
           clientName: item.client_name || '',
@@ -250,10 +385,50 @@ const MeusAgendamentos = () => {
           sessionDebited: item.session_debited === true,
         }))
 
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayKey()
       const upcoming = mapped.filter((a) => a.date >= today)
 
-      setAppointments(upcoming)
+      const packageRowsById = new Map<string, DatabaseClientPackage>()
+
+      ;((phonePackagesResponse.data || []) as DatabaseClientPackage[]).forEach((row) => {
+        packageRowsById.set(String(row.id), row)
+      })
+
+      if (codePackageResponse.data) {
+        packageRowsById.set(String(codePackageResponse.data.id), codePackageResponse.data as DatabaseClientPackage)
+      }
+
+      const packageRows = Array.from(packageRowsById.values())
+      let visiblePackages: ClientPackage[] = []
+
+      if (packageRows.length > 0) {
+        const packageIds = packageRows.map((row) => String(row.id))
+        const { data: serviceLinksData, error: serviceLinksError } = await supabase
+          .from('maya_package_services')
+          .select('package_id, services:maya_services(name)')
+          .in('package_id', packageIds)
+
+        if (serviceLinksError) throw serviceLinksError
+
+        const serviceNamesByPackageId = ((serviceLinksData || []) as DatabasePackageServiceLink[]).reduce<Record<string, string[]>>((result, link) => {
+          const packageId = String(link.package_id || '')
+          const serviceName = link.services?.name?.trim()
+
+          if (!packageId || !serviceName) return result
+
+          if (!result[packageId]) result[packageId] = []
+          if (!result[packageId].includes(serviceName)) result[packageId].push(serviceName)
+
+          return result
+        }, {})
+
+        visiblePackages = packageRows
+          .map((row) => mapPackageRow(row, serviceNamesByPackageId[String(row.id)] || []))
+          .filter((item) => item.status === 'ativo')
+      }
+
+      setAppointments(shouldSearchByPhone ? upcoming : [])
+      setClientPackages(visiblePackages)
       setSearched(true)
     } catch (err) {
       console.error('Erro ao buscar agendamentos:', err)
@@ -325,20 +500,40 @@ const MeusAgendamentos = () => {
             </p>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-            <input
-              type="tel"
-              value={phone}
-              onChange={handlePhoneChange}
-              onKeyDown={handleKeyDown}
-              placeholder={siteConfig.appointmentsPage.phonePlaceholder}
-              className="min-w-0 flex-1 rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-3 text-center text-base font-semibold tracking-wide text-gray-100 outline-none placeholder:font-normal placeholder:text-gray-500 focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:text-lg"
-            />
+          <div className="space-y-3">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                {siteConfig.appointmentsPage.phoneCardTitle}
+              </p>
+              <input
+                type="tel"
+                value={phone}
+                onChange={handlePhoneChange}
+                onKeyDown={handleKeyDown}
+                placeholder={siteConfig.appointmentsPage.phonePlaceholder}
+                className="min-w-0 w-full rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-3 text-center text-base font-semibold tracking-wide text-gray-100 outline-none placeholder:font-normal placeholder:text-gray-500 focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:text-lg"
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Consultar pacote por codigo
+              </p>
+              <input
+                type="text"
+                value={packageCode}
+                onChange={handlePackageCodeChange}
+                onKeyDown={handleKeyDown}
+                placeholder="MAYA-ABCDE"
+                className="min-w-0 w-full rounded-2xl border border-gold-400/20 bg-dark-800 px-4 py-3 text-center text-base font-semibold tracking-[0.3em] text-gray-100 uppercase outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-500 focus:border-gold-400 focus:ring-2 focus:ring-gold-400/30 sm:text-lg"
+              />
+            </div>
+
             <button
               type="button"
               onClick={searchAppointments}
               disabled={loading}
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-gold-400 px-5 py-3 font-semibold text-dark-900 shadow-md shadow-gold-400/20 transition-colors hover:bg-gold-300 disabled:opacity-60 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gold-400 px-5 py-3 font-semibold text-dark-900 shadow-md shadow-gold-400/20 transition-colors hover:bg-gold-300 disabled:opacity-60"
             >
               {loading ? (
                 <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -346,9 +541,12 @@ const MeusAgendamentos = () => {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
               ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-                </svg>
+                <>
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                  </svg>
+                  <span>Consultar</span>
+                </>
               )}
             </button>
           </div>
@@ -366,7 +564,7 @@ const MeusAgendamentos = () => {
           </div>
         )}
 
-        {searched && (
+        {searchedPhone && (
           <div className="mt-6">
             {appointments.length === 0 ? (
               <div className="rounded-3xl border border-gold-400/20 bg-dark-700 p-8 text-center shadow-card">
@@ -446,6 +644,80 @@ const MeusAgendamentos = () => {
                         {isCanceling ? siteConfig.buttons.saving : siteConfig.buttons.cancelAppointment}
                       </button>
                     </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {searched && (
+          <div className="mt-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gold-400/10" />
+              <h2 className="font-serif text-xl font-bold text-gold-300">Meus Pacotes</h2>
+              <div className="h-px flex-1 bg-gold-400/10" />
+            </div>
+
+            {clientPackages.length === 0 ? (
+              <div className="rounded-3xl border border-gold-400/20 bg-dark-700 p-6 text-center shadow-card">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-400/10">
+                  <svg className="h-7 w-7 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l2 2 4-4m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-gray-100">Nenhum pacote ativo encontrado</p>
+                <p className="mt-1 text-sm text-gray-400">
+                  Busque pelo telefone cadastrado ou informe um codigo de pacote valido.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {clientPackages.map((item) => {
+                  const remaining = getSessionsRemaining(item)
+
+                  return (
+                    <article
+                      key={item.id}
+                      className="rounded-3xl border border-gold-400/20 bg-gradient-to-br from-dark-700 to-dark-800 p-5 shadow-card"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Pacote ativo</p>
+                          <h3 className="mt-1 font-serif text-xl font-bold text-gold-300">{item.packageName || 'Pacote Maya'}</h3>
+                        </div>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${packageStatusStyles[item.status]}`}>
+                          {packageStatusLabels[item.status]}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-gold-400/20 bg-dark-900/40 p-4">
+                        <p className="text-xs uppercase tracking-wide text-gray-400">Codigo do pacote</p>
+                        <p className="mt-1 font-mono text-base font-semibold tracking-[0.25em] text-gold-300">
+                          {item.packageCode || 'Sem codigo'}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 text-sm text-gray-300 sm:grid-cols-2">
+                        <p><strong className="text-gray-100">Sessoes restantes:</strong> {remaining}</p>
+                        <p><strong className="text-gray-100">Total de sessoes:</strong> {item.totalSessions}</p>
+                        <p><strong className="text-gray-100">Validade:</strong> {formatShortDate(item.expirationDate)}</p>
+                        <p><strong className="text-gray-100">Status:</strong> {packageStatusLabels[item.status]}</p>
+                      </div>
+
+                      <div className="mt-4">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Servicos inclusos</p>
+                        <div className="flex flex-wrap gap-2">
+                          {item.serviceNames.length > 0 ? item.serviceNames.map((name) => (
+                            <span key={`${item.id}-${name}`} className="rounded-full border border-gold-400/20 bg-gold-400/10 px-3 py-1 text-xs text-gold-200">
+                              {name}
+                            </span>
+                          )) : (
+                            <span className="text-xs text-gray-500">Nenhum servico vinculado</span>
+                          )}
+                        </div>
+                      </div>
+                    </article>
                   )
                 })}
               </div>
